@@ -141,3 +141,9 @@ Copyright (C) 2025 **happy** (k666kkk666k@163.com)
 - [TheBusyBiscuit/Slimefun4](https://github.com/SlimefunGuguProject/Slimefun4) — 原始粘液科技项目
 - [SlimefunGuguProject](https://github.com/SlimefunGuguProject) — 汉化维护分支
 - [JitPack](https://jitpack.io) — Maven 依赖分发
+
+---
+
+## :star: Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=happy66dev/SlimefunCustomGuide&type=date)](https://star-history.com/#happy66dev/SlimefunCustomGuide)

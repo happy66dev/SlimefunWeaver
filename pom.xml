@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -78,7 +78,7 @@
         </dependency>
         <dependency>
             <groupId>com.github.happy66dev</groupId>
-            <artifactId>slimefun4</artifactId>
+            <artifactId>Slimefun4</artifactId>
             <version>685088e45</version>
             <scope>provided</scope>
         </dependency>

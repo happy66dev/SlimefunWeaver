@@ -19,16 +19,10 @@ import java.util.Optional;
 
 public class CustomGuideModeOption implements SlimefunGuideOption<Boolean> {
 
-    private final SlimefunAddon addon;
-
-    public CustomGuideModeOption() {
-        this.addon = CustomGuidePlugin.getInstance();
-    }
-
     @Nonnull
     @Override
     public SlimefunAddon getAddon() {
-        return addon;
+        return CustomGuidePlugin.getInstance();
     }
 
     @Nonnull

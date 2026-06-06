@@ -31,8 +31,9 @@ public final class CustomGuidePlugin extends JavaPlugin implements SlimefunAddon
 
         getServer().getPluginManager().registerEvents(new CustomGuideListener(this), this);
 
-        getCommand("slimefuncustomguide").setExecutor(new CustomGuideCommand(this));
-        getCommand("slimefuncustomguide").setTabCompleter(new CustomGuideCommand(this));
+        CustomGuideCommand cmd = new CustomGuideCommand(this);
+        getCommand("slimefuncustomguide").setExecutor(cmd);
+        getCommand("slimefuncustomguide").setTabCompleter(cmd);
 
         if (getConfig().getBoolean("web-editor.enabled", true)) {
             String bind = getConfig().getString("web-editor.bind", "127.0.0.1");

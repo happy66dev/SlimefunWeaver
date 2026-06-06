@@ -87,7 +87,7 @@ public class CustomGuideCommand implements CommandExecutor, TabCompleter {
             }
 
             String key = group.getUnlocalizedName().replaceAll("[&§][0-9a-fA-Fk-oK-OrR]", "");
-            if (key == null || key.isEmpty()) continue;
+            if (key.isEmpty()) continue;
             String display = "&f" + group.getDisplayName(null);
 
             ItemStack repItem = group.getItem(null);

@@ -1,0 +1,6 @@
+name: SlimefunCustomGuide
+version: '${project.version}'
+main: cn.rmc.slimefuncustomguide.CustomGuidePlugin
+api-version: 1.16
+depend:
+  - Slimefun

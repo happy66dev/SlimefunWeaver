@@ -3,6 +3,9 @@ package cn.rmc.slimefuncustomguide.command;
 import cn.rmc.slimefuncustomguide.CustomGuidePlugin;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.api.items.groups.FlexItemGroup;
+import io.github.thebusybiscuit.slimefun4.api.items.groups.NestedItemGroup;
+import io.github.thebusybiscuit.slimefun4.api.items.groups.SubItemGroup;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -10,6 +13,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -66,20 +70,45 @@ public class CustomGuideCommand implements CommandExecutor, TabCompleter {
         int slotCounter = 10;
         int pageCounter = 1;
 
+        Map<NestedItemGroup, List<SubItemGroup>> nestedMap = new LinkedHashMap<>();
+        if (flat) {
+            for (ItemGroup group : itemGroups) {
+                if (group instanceof SubItemGroup) {
+                    SubItemGroup sub = (SubItemGroup) group;
+                    NestedItemGroup parent = sub.getParent();
+                    nestedMap.computeIfAbsent(parent, k -> new ArrayList<>()).add(sub);
+                }
+            }
+        }
+
         for (ItemGroup group : itemGroups) {
-            String key = group.getUnlocalizedName().replaceAll("[&§]", "");
+            if (flat && group instanceof SubItemGroup) {
+                continue;
+            }
+
+            String key = group.getUnlocalizedName().replaceAll("[&§][0-9a-fA-Fk-oK-OrR]", "");
             if (key == null || key.isEmpty()) continue;
             String display = "&f" + group.getDisplayName(null);
+
+            ItemStack repItem = group.getItem(null);
             String iconId = "CHEST";
-            if (group.getItem(null) != null && group.getItem(null).getType() != null) {
-                iconId = group.getItem(null).getType().name();
+            if (repItem != null && repItem.getType() != null) {
+                iconId = repItem.getType().name();
             }
 
             ConfigurationSection groupSection = root.createSection(key);
             groupSection.set("display", display);
             ConfigurationSection iconSection = groupSection.createSection("icon");
-            iconSection.set("type", "VANILLA");
-            iconSection.set("id", iconId);
+
+            SlimefunItem sfIconItem = SlimefunItem.getByItem(repItem);
+            if (sfIconItem != null) {
+                iconSection.set("type", "SLIMEFUN");
+                iconSection.set("id", sfIconItem.getId());
+            } else {
+                iconSection.set("type", "VANILLA");
+                iconSection.set("id", iconId);
+            }
+
             groupSection.set("page", pageCounter);
             groupSection.set("slot", slotCounter);
             slotCounter++;
@@ -88,7 +117,16 @@ public class CustomGuideCommand implements CommandExecutor, TabCompleter {
                 pageCounter++;
             }
 
-            List<SlimefunItem> items = group.getItems();
+            List<SlimefunItem> items = new ArrayList<>();
+            if (flat && group instanceof NestedItemGroup) {
+                List<SubItemGroup> subGroups = nestedMap.getOrDefault(group, Collections.emptyList());
+                for (SubItemGroup sub : subGroups) {
+                    items.addAll(sub.getItems());
+                }
+            } else if (!(group instanceof FlexItemGroup)) {
+                items = group.getItems();
+            }
+
             if (!items.isEmpty()) {
                 List<Map<String, Object>> itemList = new ArrayList<>();
                 int itemSlot = 10;

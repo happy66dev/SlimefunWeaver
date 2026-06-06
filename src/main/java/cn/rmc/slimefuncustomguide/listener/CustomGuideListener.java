@@ -91,18 +91,15 @@ public class CustomGuideListener implements Listener {
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent e) {
-        CustomGuidePlugin.ItemDetailReturn ret = plugin.getItemDetailReturns().get(e.getPlayer());
+        CustomGuidePlugin.ItemDetailReturn ret = plugin.getItemDetailReturns().remove(e.getPlayer());
         if (ret == null) return;
         Player p = (Player) e.getPlayer();
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (p.getOpenInventory().getTopInventory().getSize() == 0) {
-                plugin.getItemDetailReturns().remove(p);
-                CustomGuideHistory history = histories.computeIfAbsent(p, k -> new CustomGuideHistory());
-                if (ret.category != null) {
-                    renderer.openMenu(p, history, ret.mode, ret.category, ret.page);
-                } else {
-                    renderer.openMainMenu(p, history, ret.mode, ret.page);
-                }
+            CustomGuideHistory history = histories.computeIfAbsent(p, k -> new CustomGuideHistory());
+            if (ret.category != null) {
+                renderer.openMenu(p, history, ret.mode, ret.category, ret.page);
+            } else {
+                renderer.openMainMenu(p, history, ret.mode, ret.page);
             }
         });
     }

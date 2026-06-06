@@ -36,12 +36,13 @@ public final class JsonUtil {
         sb.append("\"page\":").append(cat.getPage()).append(',');
         sb.append("\"slot\":").append(cat.getSlot()).append(',');
         sb.append("\"children\":[");
+        boolean firstChild = true;
         List<GuideTreeNode> children = cat.getChildren();
-        for (int i = 0; i < children.size(); i++) {
-            GuideTreeNode child = children.get(i);
+        for (GuideTreeNode child : children) {
             if (child.getType() == TreeNodeType.CATEGORY) {
-                if (i > 0) sb.append(',');
+                if (!firstChild) sb.append(',');
                 appendCategory(sb, (CustomCategory) child);
+                firstChild = false;
             }
         }
         sb.append("],\"items\":[");
@@ -101,7 +102,7 @@ public final class JsonUtil {
         sb.append(']');
     }
 
-    private static String escape(String s) {
+    public static String escape(String s) {
         if (s == null) return "";
         StringBuilder out = new StringBuilder();
         for (char c : s.toCharArray()) {

@@ -111,7 +111,10 @@ public class WebApiHandler implements HttpHandler {
 
         String content = json.trim();
         if (content.startsWith("{\"categories\":[")) {
-            content = content.substring("{\"categories\":[".length(), content.length() - 2);
+            int end = content.lastIndexOf(']');
+            if (end >= 0) {
+                content = content.substring("{\"categories\":[".length(), end);
+            }
             int depth = 0;
             int start = -1;
             for (int i = 0; i < content.length(); i++) {
@@ -142,6 +145,7 @@ public class WebApiHandler implements HttpHandler {
 
     private void parseCategoryJson(String json, ConfigurationSection parent) {
         String key = extractString(json, "key");
+        if (key == null) return;
         String display = extractString(json, "display");
         if (display == null) display = key;
         boolean glow = extractBoolean(json, "glow");
@@ -367,22 +371,30 @@ public class WebApiHandler implements HttpHandler {
         if (query != null) {
             for (String param : query.split("&")) {
                 if (param.startsWith("q=")) {
-                    q = URLDecoder.decode(param.substring(2), "UTF-8").toLowerCase();
+                    try {
+                        q = URLDecoder.decode(param.substring(2), StandardCharsets.UTF_8.name()).toLowerCase();
+                    } catch (UnsupportedEncodingException e) {
+                        q = param.substring(2).toLowerCase();
+                    }
                 }
             }
         }
 
         StringBuilder sb = new StringBuilder("{\"results\":[");
         boolean first = true;
+        boolean truncated = false;
 
         if (!q.isEmpty()) {
             for (Material mat : Material.values()) {
                 if (mat.isItem() && mat.name().toLowerCase().contains(q)) {
                     if (!first) sb.append(',');
                     sb.append("{\"type\":\"VANILLA\",\"id\":\"").append(mat.name());
-                    sb.append("\",\"display\":\"").append(escapeJson(mat.name())).append("\"}");
+                    sb.append("\",\"display\":\"").append(JsonUtil.escape(mat.name())).append("\"}");
                     first = false;
-                    if (sb.length() > 5000) break;
+                    if (sb.length() > 5000) {
+                        truncated = true;
+                        break;
+                    }
                 }
             }
 
@@ -391,17 +403,24 @@ public class WebApiHandler implements HttpHandler {
                 String id = sfItem.getId();
                 if ((name != null && name.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
                     if (!first) sb.append(',');
-                    sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(escapeJson(id));
-                    sb.append("\",\"display\":\"").append(escapeJson(name != null ? name : id));
-                    sb.append("\",\"group\":\"").append(escapeJson(sfItem.getItemGroup().getUnlocalizedName()));
+                    sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(JsonUtil.escape(id));
+                    sb.append("\",\"display\":\"").append(JsonUtil.escape(name != null ? name : id));
+                    sb.append("\",\"group\":\"").append(JsonUtil.escape(sfItem.getItemGroup().getUnlocalizedName()));
                     sb.append("\"}");
                     first = false;
-                    if (sb.length() > 10000) break;
+                    if (sb.length() > 10000) {
+                        truncated = true;
+                        break;
+                    }
                 }
             }
         }
 
-        sb.append("]}");
+        if (truncated) {
+            sb.append("],\"truncated\":true}");
+        } else {
+            sb.append("]}");
+        }
         byte[] bytes = sb.toString().getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
         exchange.sendResponseHeaders(200, bytes.length);
@@ -414,8 +433,8 @@ public class WebApiHandler implements HttpHandler {
         boolean first = true;
         for (io.github.thebusybiscuit.slimefun4.api.items.ItemGroup group : Slimefun.getRegistry().getAllItemGroups()) {
             if (!first) sb.append(',');
-            sb.append("{\"key\":\"").append(escapeJson(group.getUnlocalizedName()));
-            sb.append("\",\"display\":\"").append(escapeJson(group.getDisplayName(null))).append("\"}");
+            sb.append("{\"key\":\"").append(JsonUtil.escape(group.getUnlocalizedName()));
+            sb.append("\",\"display\":\"").append(JsonUtil.escape(group.getDisplayName(null))).append("\"}");
             first = false;
         }
         sb.append("]}");
@@ -426,19 +445,4 @@ public class WebApiHandler implements HttpHandler {
         exchange.getResponseBody().close();
     }
 
-    private static String escapeJson(String s) {
-        if (s == null) return "";
-        StringBuilder out = new StringBuilder();
-        for (char c : s.toCharArray()) {
-            switch (c) {
-                case '"':  out.append("\\\""); break;
-                case '\\': out.append("\\\\"); break;
-                case '\n': out.append("\\n"); break;
-                case '\r': out.append("\\r"); break;
-                case '\t': out.append("\\t"); break;
-                default:   out.append(c);
-            }
-        }
-        return out.toString();
-    }
 }

@@ -1,0 +1,46 @@
+categories:
+  机器:
+    display: "&e机器设备"
+    icon:
+      type: VANILLA
+      id: "CRAFTING_TABLE"
+    lore:
+      - "&7各种机械与设备"
+    page: 1
+    slot: 10
+    发电机:
+      display: "&c发电机"
+      icon:
+        type: VANILLA
+        id: "FURNACE"
+      lore:
+        - "&7产生电力的设备"
+      page: 1
+      slot: 10
+      低级发电机:
+        display: "&7低级发电机"
+        icon:
+          type: SLIMEFUN
+          id: "coal_generator"
+        lore:
+          - "&7入门级发电设备"
+          - "&7第 {page}/{total_pages} 页"
+        page: 1
+        slot: 10
+        items:
+          - id: "slimefun:coal_generator"
+            page: 1
+            slot: 10
+          - id: "slimefun:lava_generator"
+            page: 1
+            slot: 11
+          - placeholder:
+              icon:
+                type: VANILLA
+                id: "GRAY_STAINED_GLASS_PANE"
+              display: "&8&l--- 分隔线 ---"
+              page: 1
+              slot: 12
+          - id: "slimefun:combustion_reactor"
+            page: 1
+            slot: 13

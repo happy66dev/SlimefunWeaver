@@ -222,7 +222,7 @@ public class CustomGuideRenderer {
                 int next = page - 1;
                 if (next > 0) {
                     boolean isRoot = category.getKey().equals(ROOT_KEY);
-                    if (isRoot) openMainMenu(pl, history, mode, next);
+                    if (isRoot) { history.setMainMenuPage(next); openMainMenu(pl, history, mode, next); }
                     else openMenu(pl, history, mode, category, next);
                 }
                 return false;
@@ -233,7 +233,7 @@ public class CustomGuideRenderer {
                 int next = page + 1;
                 if (next <= maxPage) {
                     boolean isRoot = category.getKey().equals(ROOT_KEY);
-                    if (isRoot) openMainMenu(pl, history, mode, next);
+                    if (isRoot) { history.setMainMenuPage(next); openMainMenu(pl, history, mode, next); }
                     else openMenu(pl, history, mode, category, next);
                 }
                 return false;

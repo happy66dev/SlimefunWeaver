@@ -13,6 +13,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.*;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.logging.Level;
 
@@ -140,10 +142,16 @@ public class WebApiHandler implements HttpHandler {
             writer.flush();
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to save categories.yml from web editor", e);
+            return;
         }
         File finalFile = new File(plugin.getDataFolder(), "categories.yml");
-        if (finalFile.exists()) finalFile.delete();
-        tempFile.renameTo(finalFile);
+        try {
+            Files.move(tempFile.toPath(), finalFile.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to replace categories.yml", e);
+        }
     }
 
     private void parseCategoryJson(String json, ConfigurationSection parent) {

@@ -127,7 +127,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
   var icon = hasChildren ? '\u{1F4C1}' : '\u{1F4C4}';
-  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label" title="' + MC.escapeHtml(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
+  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
   if (state.selectedCategory === cat) li.classList.add('active');
@@ -308,7 +308,7 @@ function updateSelection() {
   if (!node) return;
   var isItem = node.type === 'ITEM';
   if (!isItem) node.display = $('edit-display').value;
-  node.lore = $('edit-lore').value.split('\n').filter(function(l) { return l.trim() !== ''; });
+  node.lore = $('edit-lore').value.split('\n');
   node.glow = $('edit-glow').checked;
   node.page = parseInt($('edit-page').value) || 1;
   updateDisplayPreview();

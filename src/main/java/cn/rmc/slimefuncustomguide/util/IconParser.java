@@ -6,7 +6,10 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.Optional;
 import java.util.logging.Level;
@@ -25,6 +28,18 @@ public final class IconParser {
             case HEAD:     return parseHead(source.getId(), logger);
             default:       return Optional.empty();
         }
+    }
+
+    public static Optional<ItemStack> parse(IconSource source, Logger logger, boolean glow) {
+        Optional<ItemStack> opt = parse(source, logger);
+        if (glow && opt.isPresent()) {
+            ItemStack item = opt.get();
+            ItemMeta meta = item.getItemMeta();
+            meta.addEnchant(Enchantment.DURABILITY, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            item.setItemMeta(meta);
+        }
+        return opt;
     }
 
     private static Optional<ItemStack> parseVanilla(String id, Logger logger) {

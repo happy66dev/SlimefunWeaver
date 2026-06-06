@@ -4,3 +4,15 @@ main: cn.rmc.slimefuncustomguide.CustomGuidePlugin
 api-version: 1.16
 depend:
   - Slimefun
+commands:
+  slimefuncustomguide:
+    description: SlimefunCustomGuide commands
+    usage: /scg <export|reload>
+    aliases: [scg]
+permissions:
+  slimefuncustomguide.export:
+    description: Allow exporting categories
+    default: op
+  slimefuncustomguide.reload:
+    description: Allow reloading categories
+    default: op

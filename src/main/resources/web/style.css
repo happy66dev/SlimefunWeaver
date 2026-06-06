@@ -126,6 +126,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .dragging { opacity: 0.4; cursor: grabbing; }
 .drag-over { border-color: #e94560 !important; background: rgba(233,69,96,0.12) !important; transform: scale(1.02); }
 
+.color-picker { position: fixed; z-index: 300; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+.color-picker-grid { display: grid; grid-template-columns: repeat(8, 28px); gap: 3px; margin-bottom: 6px; }
+.color-picker-formats { display: flex; flex-wrap: wrap; gap: 3px; }
+.color-chip { width: 28px; height: 28px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; font-family: 'SF Mono','Consolas',monospace; border: 1px solid transparent; transition: 0.1s; }
+.color-chip:hover { border-color: #fff; transform: scale(1.1); z-index: 1; }
+.color-chip-light { color: #000; }
+.color-chip-dark { color: #fff; text-shadow: 0 0 2px #000; }
+.format-chip { padding: 3px 7px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: 'SF Mono','Consolas',monospace; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; transition: 0.1s; }
+.format-chip:hover { background: #30363d; border-color: #484f58; }
+.color-picker-tip { font-size: 10px; color: #484f58; text-align: center; margin-top: 4px; }
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }

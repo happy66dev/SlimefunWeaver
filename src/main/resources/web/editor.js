@@ -380,6 +380,120 @@ function updateSelection() {
 document.getElementById('edit-display').addEventListener('input', updateDisplayPreview);
 document.getElementById('edit-lore').addEventListener('input', updateLorePreview);
 
+var ColorPicker = {
+  colors: [
+    {code:'0',hex:'#000000',name:'Black'},
+    {code:'1',hex:'#0000AA',name:'Dark Blue'},
+    {code:'2',hex:'#00AA00',name:'Dark Green'},
+    {code:'3',hex:'#00AAAA',name:'Dark Aqua'},
+    {code:'4',hex:'#AA0000',name:'Dark Red'},
+    {code:'5',hex:'#AA00AA',name:'Dark Purple'},
+    {code:'6',hex:'#FFAA00',name:'Gold'},
+    {code:'7',hex:'#AAAAAA',name:'Gray'},
+    {code:'8',hex:'#555555',name:'Dark Gray'},
+    {code:'9',hex:'#5555FF',name:'Blue'},
+    {code:'a',hex:'#55FF55',name:'Green'},
+    {code:'b',hex:'#55FFFF',name:'Aqua'},
+    {code:'c',hex:'#FF5555',name:'Red'},
+    {code:'d',hex:'#FF55FF',name:'Light Purple'},
+    {code:'e',hex:'#FFFF55',name:'Yellow'},
+    {code:'f',hex:'#FFFFFF',name:'White'}
+  ],
+  formats: [
+    {code:'l',label:'&l 粗体'},
+    {code:'m',label:'&m 删除线'},
+    {code:'n',label:'&n 下划线'},
+    {code:'o',label:'&o 斜体'},
+    {code:'k',label:'&k 闪烁'},
+    {code:'r',label:'&r 重置'}
+  ],
+  _target: null,
+  init: function() {
+    var grid = document.getElementById('color-picker-grid');
+    grid.innerHTML = '';
+    var self = this;
+    this.colors.forEach(function(c) {
+      var chip = document.createElement('div');
+      chip.className = 'color-chip ' + (parseInt(c.code,16) >= 8 ? 'color-chip-dark' : 'color-chip-light');
+      chip.style.background = c.hex;
+      chip.textContent = '&' + c.code;
+      chip.title = c.name;
+      chip.onmousedown = function(e) { e.preventDefault(); self.pick('&' + c.code); };
+      grid.appendChild(chip);
+    });
+    var formats = document.getElementById('color-picker-formats');
+    formats.innerHTML = '';
+    this.formats.forEach(function(f) {
+      var chip = document.createElement('span');
+      chip.className = 'format-chip';
+      chip.textContent = f.label;
+      chip.title = '插入 ' + f.code;
+      chip.onmousedown = function(e) { e.preventDefault(); self.pick('&' + f.code); };
+      formats.appendChild(chip);
+    });
+    var tip = document.createElement('div');
+    tip.className = 'color-picker-tip';
+    tip.textContent = '点击插入 ESC关闭';
+    formats.appendChild(tip);
+  },
+  show: function(input) {
+    this._target = input;
+    var picker = document.getElementById('color-picker');
+    if (!picker.hasChildNodes() || picker.children.length === 0) { this.init(); }
+    var rect = input.getBoundingClientRect();
+    picker.style.left = rect.left + 'px';
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.display = 'block';
+    var self = this;
+    setTimeout(function() {
+      document.addEventListener('mousedown', self._hideHandler = function(e) {
+        if (!picker.contains(e.target)) { self.hide(); }
+      });
+    }, 0);
+  },
+  hide: function() {
+    document.getElementById('color-picker').style.display = 'none';
+    this._target = null;
+    if (this._hideHandler) { document.removeEventListener('mousedown', this._hideHandler); this._hideHandler = null; }
+  },
+  pick: function(code) {
+    var input = this._target;
+    if (!input) return;
+    var pos = this._getCursorPos(input);
+    var before = input.value.substring(0, pos);
+    var after = input.value.substring(pos);
+    var ampIdx = before.lastIndexOf('&');
+    if (ampIdx < 0) { input.value = before + code + after; }
+    else { input.value = before.substring(0, ampIdx) + code + after; }
+    this.hide();
+    input.focus();
+    this._setCursorPos(input, ampIdx >= 0 ? ampIdx + code.length : before.length + code.length);
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.dispatchEvent(new Event('change', {bubbles:true}));
+    markDirty();
+  },
+  _getCursorPos: function(input) {
+    if (input.selectionStart !== undefined) return input.selectionStart;
+    return input.value.length;
+  },
+  _setCursorPos: function(input, pos) {
+    if (input.setSelectionRange) input.setSelectionRange(pos, pos);
+  }
+};
+
+(function() {
+  function onInputKey(e) {
+    if (e.key === '&') {
+      ColorPicker.show(e.target);
+    }
+    if (e.key === 'Escape') {
+      ColorPicker.hide();
+    }
+  }
+  document.getElementById('edit-display').addEventListener('keydown', onInputKey);
+  document.getElementById('edit-lore').addEventListener('keydown', onInputKey);
+})();
+
 function deleteSelected() {
   if (!state.selectedNode || !state.selectedCategory) return;
   Dialog.confirm('确定要删除此项吗？此操作无法撤销。', function(ok) {

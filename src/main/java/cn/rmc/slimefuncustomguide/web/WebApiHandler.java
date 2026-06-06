@@ -28,10 +28,6 @@ public class WebApiHandler implements HttpHandler {
         this.indexHtml = loadFileFromJar("web/index.html");
     }
 
-    public CustomGuidePlugin getPlugin() {
-        return plugin;
-    }
-
     private String loadFileFromJar(String path) {
         try (InputStream in = plugin.getResource(path)) {
             if (in == null) return "<h1>" + path + " not found in jar</h1>";

@@ -185,65 +185,25 @@ function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
 
-  var backLi = document.createElement('li');
-  backLi.className = 'tree-root-entry';
-  if (state.navStack.length > 0) {
-    var parentCat = state.navStack[state.navStack.length - 1];
-    var parentDisplay = parentCat ? (parentCat.display || parentCat.key) : '[根级别]';
-    backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">↶ 返回 ' + MC.escapeHtml(MC.strip(parentDisplay)) + '</span>';
-    backLi.onclick = function(e) { e.stopPropagation(); goBackNav(); };
-    backLi.style.cursor = 'pointer';
-  } else {
-    backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label" style="color:#484f58;">[根级别] · 双击分类进入子级</span>';
-    backLi.onclick = null;
-    backLi.style.cursor = 'default';
-    backLi.style.opacity = '0.5';
-  }
-  root.appendChild(backLi);
+  var rootLi = document.createElement('li');
+  rootLi.className = 'tree-root-entry';
+  rootLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">[根级别]</span>';
+  rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
+  if (state.selectedCategory === null) rootLi.classList.add('active');
+  root.appendChild(rootLi);
 
   var cats = state.categories || [];
   cats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, 0)); });
   applyTreeFilter();
 }
 
-function goBackNav() {
-  if (state.navStack.length === 0) return;
-  state.selectedCategory = state.navStack.pop();
-  state.selectedNode = state.selectedCategory;
-  state.currentPage = 1;
-  renderTree();
-  renderGrid();
-  renderEditor();
-}
-
 function selectRoot() {
-  state.navStack = [];
   state.selectedCategory = null;
   state.selectedNode = null;
   state.currentPage = 1;
   renderTree();
   renderGrid();
   renderEditor();
-}
-
-var dblClickPending = null;
-
-function handleCatClick(cat, index, parentRef, li) {
-  state.selectedNode = cat;
-  state.selectedCategory = cat;
-  state.currentPage = 1;
-  if (dblClickPending) clearTimeout(dblClickPending);
-  dblClickPending = setTimeout(function() {
-    dblClickPending = null;
-    renderGrid();
-    renderEditor();
-  }, 350);
-}
-
-function handleCatDblClick(cat, index, parentRef) {
-  if (dblClickPending) clearTimeout(dblClickPending);
-  dblClickPending = null;
-  enterCategory(cat, index, parentRef);
 }
 
 function filterTree() {
@@ -284,11 +244,9 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
   var icon = '\u25b8';
-  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + ' (双击进入)">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
+  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
-  li.onclick = function(e) { e.stopPropagation(); handleCatClick(cat, index, parentRef, li); };
-  li.ondblclick = function(e) { e.stopPropagation(); handleCatDblClick(cat, index, parentRef); };
-  li.title = '\u5355\u51FB\u9009\u4E2D \u00B7 \u53CC\u51FB\u8FDB\u5165\u5B50\u7EA7';
+  li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
   if (state.selectedNode === cat) li.classList.add('active');
 
   var ul = null;
@@ -325,45 +283,6 @@ function selectCategory(cat, index, parentRef) {
   renderEditor();
 }
 
-function enterCategory(cat, index, parentRef) {
-  if (!cat.children || cat.children.length === 0) {
-    Toast.show('该分类无子分类', 'info');
-    return;
-  }
-  state.navStack.push(state.selectedCategory || state.selectedNode);
-  state.selectedCategory = cat;
-  state.selectedNode = cat;
-  state.currentPage = 1;
-  renderTree();
-  renderGrid();
-  renderEditor();
-}
-
-function gridEnterCategory(cat) {
-  if (!cat.key) return;
-  if (!cat.children || cat.children.length === 0) {
-    Toast.show('该分类无子分类', 'info');
-    return;
-  }
-  state.navStack.push(state.selectedCategory);
-  state.selectedCategory = cat;
-  state.selectedNode = cat;
-  state.currentPage = 1;
-  renderTree();
-  renderGrid();
-  renderEditor();
-}
-
-function gridGoBack() {
-  if (state.navStack.length === 0) return;
-  state.selectedCategory = state.navStack.pop();
-  state.selectedNode = state.selectedCategory;
-  state.currentPage = 1;
-  renderTree();
-  renderGrid();
-  renderEditor();
-}
-
 function getChildren() {
   if (state.selectedCategory === null) return state.categories || [];
   if (!state.selectedCategory) return [];
@@ -381,6 +300,31 @@ function getMaxPage() {
   var max = 1;
   getChildren().forEach(function(item) { if ((item.page || 1) > max) max = item.page || 1; });
   return max;
+}
+
+function gridEnterCategory(cat) {
+  if (!cat.key) return;
+  if (!cat.children || cat.children.length === 0) {
+    Toast.show('该分类无子分类', 'info');
+    return;
+  }
+  state.navStack.push(state.selectedCategory);
+  state.selectedCategory = cat;
+  state.selectedNode = cat;
+  state.currentPage = 1;
+  renderGrid();
+  renderEditor();
+  renderTree();
+}
+
+function gridGoBack() {
+  if (state.navStack.length === 0) return;
+  state.selectedCategory = state.navStack.pop();
+  state.selectedNode = state.selectedCategory;
+  state.currentPage = 1;
+  renderGrid();
+  renderEditor();
+  renderTree();
 }
 
 function renderGrid() {
@@ -420,7 +364,7 @@ function renderGrid() {
       var typeLabel = '', typeClass = '';
       if (item.type === 'REFERENCE') { typeLabel = '\u21b3 ' + ((item.mode === 'copy') ? '引用(copy)' : '引用'); typeClass = 'category'; cell.setAttribute('data-reference',''); }
       else if (item.type === 'PLACEHOLDER') { typeLabel = '占位'; typeClass = 'placeholder'; cell.setAttribute('data-placeholder',''); }
-      else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); cell.title = '双击进入子分类'; }
+      else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); }
       else { typeLabel = '物品'; typeClass = 'item'; }
 
       var displayName = item.display || item.id || item.key || '?';
@@ -429,14 +373,14 @@ function renderGrid() {
       cell.innerHTML = '<span class="cell-type-badge ' + typeClass + '">' + typeLabel + '</span><span class="cell-name">' + MC.parseToHtml(displayName) + '</span>';
       if (state.selectedNode === item) cell.classList.add('selected');
 
-      var isCategory = item.icon || item.type === 'CATEGORY' || item.key;
-      cell.onclick = (function(it, iIndex, catFlag) { return function(e) {
+      cell.onclick = (function(it, iIndex) { return function(e) {
         e.stopPropagation();
         if (isRoot && it.key) { selectCategory(it, iIndex, null); }
         else selectGridItem(it, iIndex);
-      }; })(item, idx, isCategory);
+      }; })(item, idx);
 
-      if (isCategory) {
+      var isCat = item.icon || item.type === 'CATEGORY' || item.key;
+      if (isCat) {
         cell.ondblclick = (function(it) { return function(e) {
           e.stopPropagation();
           gridEnterCategory(it);

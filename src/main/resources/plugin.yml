@@ -1,4 +1,4 @@
-﻿name: slimefunweaver
+name: SlimefunWeaver
 version: '${project.version}'
 main: cn.rmc.slimefunweaver.SlimefunWeaver
 api-version: 1.16
@@ -6,7 +6,7 @@ depend:
   - Slimefun
 commands:
   slimefunweaver:
-    description: slimefunweaver commands
+    description: SlimefunWeaver commands
     usage: /scg <export|reload>
     aliases: [scg]
 permissions:

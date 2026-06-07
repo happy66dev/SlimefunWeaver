@@ -203,23 +203,22 @@ function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
 
+  var backLi = document.createElement('li');
+  backLi.className = 'tree-root-entry';
   if (state.treeRootIndex.length > 0) {
-    var backLi = document.createElement('li');
-    backLi.className = 'tree-root-entry';
     var parentPath = state.treeRootIndex.slice(0, -1);
     var parentCat = resolveNavPath(parentPath);
     var parentDisplay = parentCat ? (parentCat.display || parentCat.key) : '[根级别]';
     backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">↶ 返回 ' + MC.escapeHtml(MC.strip(parentDisplay)) + '</span>';
     backLi.onclick = function(e) { e.stopPropagation(); goBackTree(); };
-    root.appendChild(backLi);
+    backLi.style.cursor = 'pointer';
   } else {
-    var rootLi = document.createElement('li');
-    rootLi.className = 'tree-root-entry';
-    rootLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">[根级别]</span>';
-    rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
-    if (state.selectedCategory === null) rootLi.classList.add('active');
-    root.appendChild(rootLi);
+    backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label" style="color:#484f58;">[根级别] · 双击分类进入子级</span>';
+    backLi.onclick = null;
+    backLi.style.cursor = 'default';
+    backLi.style.opacity = '0.5';
   }
+  root.appendChild(backLi);
 
   var cats = state.categories || [];
   cats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, 0)); });
@@ -310,9 +309,10 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
   var icon = '\u25b8';
-  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
+  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + ' (双击进入)">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); handleCategoryClick(cat, index, parentRef); };
+  li.title = '\u5355\u51FB\u9009\u4E2D \u00B7 \u53CC\u51FB\u8FDB\u5165\u5B50\u7EA7';
   if (state.selectedNode === cat) li.classList.add('active');
 
   var ul = null;

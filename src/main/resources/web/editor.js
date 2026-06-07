@@ -136,8 +136,7 @@ var Dialog = {
 
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
-  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all',
-  navStack: []
+  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all'
 };
 
 function $(id) { return document.getElementById(id); }
@@ -172,7 +171,6 @@ async function discardChanges() {
     loadCategories().then(function() {
       state.selectedCategory = null;
       state.selectedNode = null;
-      state.navStack = [];
       state.currentPage = 1;
       renderGrid();
       renderEditor();
@@ -304,7 +302,6 @@ function getMaxPage() {
 
 function gridEnterCategory(cat) {
   if (!cat.key) return;
-  state.navStack.push(state.selectedCategory);
   state.selectedCategory = cat;
   state.selectedNode = cat;
   state.currentPage = 1;
@@ -313,10 +310,25 @@ function gridEnterCategory(cat) {
   renderTree();
 }
 
+function findCategoryParent(target) {
+  function walk(cats, parent) {
+    for (var i = 0; i < cats.length; i++) {
+      if (cats[i] === target) return parent;
+      if (cats[i].children && cats[i].children.length > 0) {
+        var found = walk(cats[i].children, cats[i]);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  }
+  return walk(state.categories, null);
+}
+
 function gridGoBack() {
-  if (state.navStack.length === 0) return;
-  state.selectedCategory = state.navStack.pop();
-  state.selectedNode = state.selectedCategory;
+  if (state.selectedCategory === null) return;
+  var parent = findCategoryParent(state.selectedCategory);
+  state.selectedCategory = parent;
+  state.selectedNode = parent;
   state.currentPage = 1;
   renderGrid();
   renderEditor();
@@ -336,7 +348,7 @@ function renderGrid() {
   $('grid-title').textContent = isRoot ? '根级别' : '';
   if (!isRoot) $('grid-title').innerHTML = MC.parseToHtml(state.selectedCategory.display || state.selectedCategory.key || '未命名分类');
   $('grid-page-controls').style.display = 'flex';
-  $('btn-grid-back').disabled = state.navStack.length === 0;
+  $('btn-grid-back').disabled = state.selectedCategory === null;
 
   var maxPage = getMaxPage();
   state.currentPage = Math.min(state.currentPage, Math.max(1, maxPage));

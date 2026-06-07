@@ -323,20 +323,31 @@ public class CustomGuideRenderer {
 
     private ItemStack buildReferenceItem(CustomReferenceEntry entry, Player player, int page, int maxPage) {
         CustomCategory target = entry.isCopyMode() ? findCategoryByKey(plugin.getRootCategories(), entry.getTargetCategoryKey()) : null;
-        IconSource effectiveIcon = (target != null && target.getIconSource() != null) ? target.getIconSource() : entry.getIconSource();
-        boolean effectiveGlow = target != null ? target.isGlow() : entry.isGlow();
+        boolean useTarget = target != null && entry.isCopyMode();
 
-        String resolvedDisplay = entry.getDisplay();
-        if (resolvedDisplay == null || resolvedDisplay.isEmpty()) {
-            resolvedDisplay = (target != null) ? target.getDisplay() : null;
+        IconSource effectiveIcon;
+        if (useTarget && target.getIconSource() != null) {
+            effectiveIcon = target.getIconSource();
+        } else {
+            effectiveIcon = entry.getIconSource();
         }
-        if (resolvedDisplay == null || resolvedDisplay.isEmpty()) {
-            resolvedDisplay = "\u21b3 " + entry.getTargetCategoryKey();
+        boolean effectiveGlow = useTarget ? target.isGlow() : entry.isGlow();
+
+        String resolvedDisplay;
+        if (useTarget && !entry.hasCustomDisplay()) {
+            resolvedDisplay = target.getDisplay();
+            if (resolvedDisplay == null || resolvedDisplay.isEmpty()) resolvedDisplay = target.getKey();
+        } else if (entry.hasCustomDisplay()) {
+            resolvedDisplay = entry.getRawDisplay();
+        } else {
+            resolvedDisplay = entry.getDisplay();
         }
 
-        List<String> resolvedLore = entry.getLore();
-        if (resolvedLore.isEmpty() && target != null) {
+        List<String> resolvedLore;
+        if (useTarget && !entry.hasCustomLore()) {
             resolvedLore = target.getLore();
+        } else {
+            resolvedLore = entry.getRawLore();
         }
 
         final String finalDisplay = resolvedDisplay;
@@ -347,7 +358,7 @@ public class CustomGuideRenderer {
 
         return new CustomItemStack(icon, meta -> {
             meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', finalDisplay));
-            if (!finalLore.isEmpty()) {
+            if (finalLore != null && !finalLore.isEmpty()) {
                 List<String> colored = new ArrayList<>();
                 for (String line : finalLore) colored.add(ChatColor.translateAlternateColorCodes('&', line));
                 meta.setLore(colored);

@@ -48,6 +48,12 @@ public class CustomReferenceEntry implements GuideTreeNode {
     public String getMode() { return mode; }
     public boolean isCopyMode() { return "copy".equals(mode); }
 
+    public String getRawDisplay() { return display; }
+    public boolean hasCustomDisplay() { return display != null && !display.isEmpty(); }
+
+    public List<String> getRawLore() { return new ArrayList<>(lore); }
+    public boolean hasCustomLore() { return !lore.isEmpty(); }
+
     @Override public TreeNodeType getType() { return TreeNodeType.REFERENCE; }
 
     @Override

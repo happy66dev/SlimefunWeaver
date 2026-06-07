@@ -133,7 +133,7 @@ public final class JsonUtil {
         sb.append("\"mode\":\"");
         sb.append(escape(entry.getMode()));
         sb.append("\",");
-        appendString(sb, "display", entry.getDisplay());
+        appendString(sb, "display", entry.getRawDisplay());
         sb.append(',');
         sb.append("\"icon\":{\"type\":\"");
         sb.append(escape(iconTypeName));
@@ -141,7 +141,7 @@ public final class JsonUtil {
         sb.append(escape(iconId));
         sb.append("\"},");
         sb.append("\"glow\":").append(entry.isGlow()).append(',');
-        appendStrings(sb, "lore", entry.getLore());
+        appendStrings(sb, "lore", entry.getRawLore());
         sb.append(',');
         sb.append("\"page\":").append(entry.getPage()).append(',');
         sb.append("\"slot\":").append(entry.getSlot()).append('}');

@@ -137,7 +137,7 @@ var Dialog = {
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
   currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all',
-  treeRootIndex: []
+  navStack: []
 };
 
 function $(id) { return document.getElementById(id); }
@@ -172,7 +172,7 @@ async function discardChanges() {
     loadCategories().then(function() {
       state.selectedCategory = null;
       state.selectedNode = null;
-      state.treeRootIndex = [];
+      state.navStack = [];
       state.currentPage = 1;
       renderGrid();
       renderEditor();
@@ -181,36 +181,17 @@ async function discardChanges() {
   });
 }
 
-function resolveNavPath(indexPath) {
-  if (!indexPath || indexPath.length === 0) return null;
-  var cats = state.categories;
-  var found = null;
-  for (var i = 0; i < indexPath.length; i++) {
-    var idx = indexPath[i];
-    if (idx < 0 || idx >= cats.length) return null;
-    found = cats[idx];
-    cats = [];
-    if (found.children) {
-      for (var j = 0; j < found.children.length; j++) {
-        if (found.children[j].key) cats.push(found.children[j]);
-      }
-    }
-  }
-  return found;
-}
-
 function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
 
   var backLi = document.createElement('li');
   backLi.className = 'tree-root-entry';
-  if (state.treeRootIndex.length > 0) {
-    var parentPath = state.treeRootIndex.slice(0, -1);
-    var parentCat = resolveNavPath(parentPath);
+  if (state.navStack.length > 0) {
+    var parentCat = state.navStack[state.navStack.length - 1];
     var parentDisplay = parentCat ? (parentCat.display || parentCat.key) : '[根级别]';
     backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">↶ 返回 ' + MC.escapeHtml(MC.strip(parentDisplay)) + '</span>';
-    backLi.onclick = function(e) { e.stopPropagation(); goBackTree(); };
+    backLi.onclick = function(e) { e.stopPropagation(); goBackNav(); };
     backLi.style.cursor = 'pointer';
   } else {
     backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label" style="color:#484f58;">[根级别] · 双击分类进入子级</span>';
@@ -225,16 +206,10 @@ function renderTree() {
   applyTreeFilter();
 }
 
-function goBackTree() {
-  state.treeRootIndex.pop();
-  var prevCat = resolveNavPath(state.treeRootIndex);
-  if (prevCat) {
-    state.selectedCategory = prevCat;
-    state.selectedNode = prevCat;
-  } else {
-    state.selectedCategory = null;
-    state.selectedNode = null;
-  }
+function goBackNav() {
+  if (state.navStack.length === 0) return;
+  state.selectedCategory = state.navStack.pop();
+  state.selectedNode = state.selectedCategory;
   state.currentPage = 1;
   renderTree();
   renderGrid();
@@ -242,7 +217,7 @@ function goBackTree() {
 }
 
 function selectRoot() {
-  state.treeRootIndex = [];
+  state.navStack = [];
   state.selectedCategory = null;
   state.selectedNode = null;
   state.currentPage = 1;
@@ -355,32 +330,38 @@ function enterCategory(cat, index, parentRef) {
     Toast.show('该分类无子分类', 'info');
     return;
   }
-  var fullPath = findPathToCategory(cat);
-  if (fullPath === null) return;
-  state.treeRootIndex = fullPath;
-  state.selectedNode = cat;
+  state.navStack.push(state.selectedCategory || state.selectedNode);
   state.selectedCategory = cat;
+  state.selectedNode = cat;
   state.currentPage = 1;
   renderTree();
   renderGrid();
   renderEditor();
 }
 
-function findPathToCategory(target) {
-  var path = [];
-  function walk(cats) {
-    for (var i = 0; i < cats.length; i++) {
-      if (cats[i] === target) { path.push(i); return true; }
-      if (cats[i].children && cats[i].children.length > 0) {
-        path.push(i);
-        if (walk(cats[i].children)) return true;
-        path.pop();
-      }
-    }
-    return false;
+function gridEnterCategory(cat) {
+  if (!cat.key) return;
+  if (!cat.children || cat.children.length === 0) {
+    Toast.show('该分类无子分类', 'info');
+    return;
   }
-  if (walk(state.categories)) return path;
-  return null;
+  state.navStack.push(state.selectedCategory);
+  state.selectedCategory = cat;
+  state.selectedNode = cat;
+  state.currentPage = 1;
+  renderTree();
+  renderGrid();
+  renderEditor();
+}
+
+function gridGoBack() {
+  if (state.navStack.length === 0) return;
+  state.selectedCategory = state.navStack.pop();
+  state.selectedNode = state.selectedCategory;
+  state.currentPage = 1;
+  renderTree();
+  renderGrid();
+  renderEditor();
 }
 
 function getChildren() {
@@ -415,6 +396,7 @@ function renderGrid() {
   $('grid-title').textContent = isRoot ? '根级别' : '';
   if (!isRoot) $('grid-title').innerHTML = MC.parseToHtml(state.selectedCategory.display || state.selectedCategory.key || '未命名分类');
   $('grid-page-controls').style.display = 'flex';
+  $('btn-grid-back').style.display = state.navStack.length > 0 ? '' : 'none';
 
   var maxPage = getMaxPage();
   state.currentPage = Math.min(state.currentPage, Math.max(1, maxPage));
@@ -438,7 +420,7 @@ function renderGrid() {
       var typeLabel = '', typeClass = '';
       if (item.type === 'REFERENCE') { typeLabel = '\u21b3 ' + ((item.mode === 'copy') ? '引用(copy)' : '引用'); typeClass = 'category'; cell.setAttribute('data-reference',''); }
       else if (item.type === 'PLACEHOLDER') { typeLabel = '占位'; typeClass = 'placeholder'; cell.setAttribute('data-placeholder',''); }
-      else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); }
+      else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); cell.title = '双击进入子分类'; }
       else { typeLabel = '物品'; typeClass = 'item'; }
 
       var displayName = item.display || item.id || item.key || '?';
@@ -447,11 +429,19 @@ function renderGrid() {
       cell.innerHTML = '<span class="cell-type-badge ' + typeClass + '">' + typeLabel + '</span><span class="cell-name">' + MC.parseToHtml(displayName) + '</span>';
       if (state.selectedNode === item) cell.classList.add('selected');
 
-      cell.onclick = (function(it, iIndex) { return function(e) {
+      var isCategory = item.icon || item.type === 'CATEGORY' || item.key;
+      cell.onclick = (function(it, iIndex, catFlag) { return function(e) {
         e.stopPropagation();
         if (isRoot && it.key) { selectCategory(it, iIndex, null); }
         else selectGridItem(it, iIndex);
-      }; })(item, idx);
+      }; })(item, idx, isCategory);
+
+      if (isCategory) {
+        cell.ondblclick = (function(it) { return function(e) {
+          e.stopPropagation();
+          gridEnterCategory(it);
+        }; })(item);
+      }
 
       cell.oncontextmenu = (function(it) { return function(e) {
         e.preventDefault();
@@ -1018,6 +1008,10 @@ document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveAll(); }
   if (e.key === 'ArrowLeft' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') prevPage();
   if (e.key === 'ArrowRight' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') nextPage();
+  if (e.key === 'Backspace' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    gridGoBack();
+  }
 });
 
 window.addEventListener('beforeunload', function(e) {

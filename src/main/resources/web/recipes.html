@@ -363,6 +363,12 @@ function getTypeInfo(key) {
     else if (slots.length === 2) { totalSlots = 2; }
     else if (slots.length > 0) { totalSlots = slots.length; }
   }
+  if (slots && slots.length > totalSlots && totalSlots <= 1) {
+    if (slots.length >= 9) { totalSlots = 9; }
+    else if (slots.length >= 4) { totalSlots = 4; }
+    else if (slots.length >= 2) { totalSlots = 2; }
+    else { totalSlots = slots.length; }
+  }
   var cols = totalSlots === 9 ? 3 : (totalSlots === 4 ? 2 : (totalSlots === 2 ? 2 : 1));
   return {name:name, slots:totalSlots, cols:cols, hasTime:hasTime};
 }

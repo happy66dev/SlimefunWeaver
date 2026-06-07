@@ -70,6 +70,7 @@ public class RecipeApiHandler implements HttpHandler {
         BUILTIN_RECIPE_TYPES.add("slimefun:geo_miner");
         BUILTIN_RECIPE_TYPES.add("slimefun:oil_pump");
         BUILTIN_RECIPE_TYPES.add("slimefun:nuclear_reactor");
+        BUILTIN_RECIPE_TYPES.add("slimefun:null");
     }
 
     private static final Set<String> TIMED_RECIPE_TYPES = new HashSet<>();
@@ -622,6 +623,7 @@ public class RecipeApiHandler implements HttpHandler {
             }
         } catch (Exception ignored) {}
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
+        if ("null".equals(shortKey)) return "\u65E0\u7279\u5B9A\u5408\u6210\u65B9\u5F0F";
         return shortKey.replace('_', ' ');
     }
 
@@ -629,7 +631,7 @@ public class RecipeApiHandler implements HttpHandler {
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
         switch (shortKey) {
             case "enhanced_crafting_table": case "armor_forge": case "magic_workbench":
-            case "ancient_altar": case "shaped": case "shapeless": return 9;
+            case "ancient_altar": case "shaped": case "shapeless": case "null": return 9;
             case "smeltery": case "heated_pressure_chamber": case "ore_crusher":
             case "compressor": case "grind_stone": case "juicer": case "gold_pan":
             case "freezer": case "food_fabricator": case "food_composter":

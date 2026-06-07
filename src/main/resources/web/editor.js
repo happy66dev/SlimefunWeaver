@@ -602,17 +602,16 @@ function addItem() {
 function addReference() {
   if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
   if (state.selectedCategory === null) { Toast.show('根级别不能添加引用，请选择子分类', 'warning'); return; }
-  Dialog.prompt('请输入目标分类的 key:', '', function(key) {
-    if (!key || !key.trim()) return;
-    key = key.trim();
-    var newRef = { type: 'REFERENCE', ref: key, mode: 'custom', display: '', icon: { type: 'VANILLA', id: 'ARROW' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
-    if (!state.selectedCategory.items) state.selectedCategory.items = [];
-    state.selectedCategory.items.push(newRef);
-    markDirty();
-    renderGrid();
-    renderTree();
-    Toast.show('已添加引用: \u21b3 ' + key, 'success');
-  });
+  state.pickerTarget = 'addReference';
+  $('picker-title').textContent = '选择引用目标分类';
+  $('picker-filters').style.display = 'none';
+  $('picker-overlay').style.display = 'flex';
+  var input = $('picker-search');
+  input.value = '';
+  input.placeholder = '搜索分类名或 key...';
+  $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词搜索，或直接选择</div>';
+  searchReferenceCategories();
+  setTimeout(function() { input.focus(); }, 100);
 }
 
 function openIconPicker() {
@@ -711,12 +710,76 @@ function moveToPage() {
 }
 
 var searchTimer = null;
+var refCategoryResults = [];
+
+function searchReferenceCategories() {
+  var q = ($('picker-search').value || '').toLowerCase().trim();
+  refCategoryResults = [];
+  collectAllCategories(state.categories, [], q);
+  renderReferenceResults();
+}
+
+function collectAllCategories(cats, breadcrumb, q) {
+  if (!cats) return;
+  cats.forEach(function(cat) {
+    if (state.selectedCategory && cat === state.selectedCategory) return;
+    var key = (cat.key || '').toLowerCase();
+    var display = MC.strip(cat.display || cat.key || '').toLowerCase();
+    if (!q || key.indexOf(q) >= 0 || display.indexOf(q) >= 0) {
+      refCategoryResults.push({ cat: cat, breadcrumb: breadcrumb.slice() });
+    }
+    if (cat.children && cat.children.length > 0) {
+      var subBreadcrumb = breadcrumb.slice();
+      subBreadcrumb.push(cat);
+      collectAllCategories(cat.children, subBreadcrumb, q);
+    }
+  });
+}
+
+function renderReferenceResults() {
+  if (refCategoryResults.length === 0) {
+    $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">无匹配分类</div>';
+    return;
+  }
+  var html = '';
+  refCategoryResults.forEach(function(r, i) {
+    var cat = r.cat;
+    var pathHtml = '';
+    r.breadcrumb.forEach(function(bc) {
+      pathHtml += '<span class="ref-path-seg">' + MC.escapeHtml(MC.strip(bc.display || bc.key)) + '</span><span class="ref-path-arrow">\u25b8</span>';
+    });
+    html += '<div class="picker-item" onclick="pickRefCategory(' + i + ')">' +
+      '<span class="item-type category">分类</span>' +
+      '<span>' + MC.parseToHtml(cat.display || cat.key) + '</span>' +
+      '<span class="item-id">' + (cat.key || '') + '</span>' +
+      '<div class="ref-path">' + pathHtml + '</div>' +
+      '</div>';
+  });
+  $('picker-results').innerHTML = html;
+}
+
+function pickRefCategory(index) {
+  var r = refCategoryResults[index];
+  var cat = r.cat;
+  var key = cat.key;
+  if (!key) return;
+  var newRef = { type: 'REFERENCE', ref: key, mode: 'custom', display: '', icon: { type: 'VANILLA', id: 'ARROW' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
+  if (!state.selectedCategory.items) state.selectedCategory.items = [];
+  state.selectedCategory.items.push(newRef);
+  closePicker();
+  markDirty();
+  renderGrid();
+  renderTree();
+  Toast.show('已添加引用: \u21b3 ' + (cat.display || key), 'success');
+}
+
 async function searchMaterials() {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(doSearch, 250);
 }
 
 async function doSearch() {
+  if (state.pickerTarget === 'addReference') { searchReferenceCategories(); return; }
   var q = $('picker-search').value.trim();
   if (!q) { $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>'; return; }
   $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">搜索中...</div>';

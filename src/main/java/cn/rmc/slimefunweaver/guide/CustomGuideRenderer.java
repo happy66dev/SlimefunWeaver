@@ -21,6 +21,7 @@ import cn.rmc.slimefunweaver.config.PlaceholderResolver;
 import cn.rmc.slimefunweaver.model.CustomCategory;
 import cn.rmc.slimefunweaver.model.CustomItemEntry;
 import cn.rmc.slimefunweaver.model.CustomPlaceholderEntry;
+import cn.rmc.slimefunweaver.model.CustomReferenceEntry;
 import cn.rmc.slimefunweaver.model.GuideTreeNode;
 import cn.rmc.slimefunweaver.model.IconSource;
 import cn.rmc.slimefunweaver.model.IconType;
@@ -45,6 +46,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -185,6 +187,8 @@ public class CustomGuideRenderer {
                 displayItem = buildCategoryItem((CustomCategory) child, player, page, maxPage);
             } else if (child.getType() == TreeNodeType.ITEM) {
                 displayItem = ((CustomItemEntry) child).getIcon(player);
+            } else if (child.getType() == TreeNodeType.REFERENCE) {
+                displayItem = buildReferenceItem((CustomReferenceEntry) child, player, page, maxPage);
             } else {
                 displayItem = buildPlaceholderItem((CustomPlaceholderEntry) child);
             }
@@ -197,6 +201,17 @@ public class CustomGuideRenderer {
                     SlimefunWeaver.debug(pl, "CATEGORY click: " + cat.getKey() + " from page " + page);
                     history.push(cat, page);
                     openMenu(pl, history, mode, cat, 1);
+                    return false;
+                });
+            } else if (child.getType() == TreeNodeType.REFERENCE) {
+                CustomReferenceEntry ref = (CustomReferenceEntry) child;
+                menu.addMenuClickHandler(absSlot, (pl, s, is, action) -> {
+                    CustomCategory target = findCategoryByKey(plugin.getRootCategories(), ref.getTargetCategoryKey());
+                    if (target != null) {
+                        SlimefunWeaver.debug(pl, "REFERENCE click: " + ref.getTargetCategoryKey() + " from page " + page);
+                        history.push(category, page);
+                        openMenu(pl, history, mode, target, 1);
+                    }
                     return false;
                 });
             } else if (child.getType() == TreeNodeType.ITEM) {
@@ -305,6 +320,36 @@ public class CustomGuideRenderer {
                 return false;
             });
         }
+    }
+
+    private ItemStack buildReferenceItem(CustomReferenceEntry entry, Player player, int page, int maxPage) {
+        Optional<ItemStack> optIcon = IconParser.parse(entry.getIconSource(), plugin.getLogger(), entry.isGlow());
+        ItemStack icon = optIcon.orElse(new ItemStack(Material.ARROW));
+
+        return new CustomItemStack(icon, meta -> {
+            String display = entry.getDisplay();
+            if (display == null || display.isEmpty()) display = "\u21b3 " + entry.getTargetCategoryKey();
+            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', display));
+            List<String> lore = entry.getLore();
+            if (!lore.isEmpty()) {
+                List<String> colored = new ArrayList<>();
+                for (String line : lore) colored.add(ChatColor.translateAlternateColorCodes('&', line));
+                meta.setLore(colored);
+            }
+        });
+    }
+
+    private static CustomCategory findCategoryByKey(List<CustomCategory> roots, String key) {
+        for (CustomCategory cat : roots) {
+            if (cat.getKey().equals(key)) return cat;
+            for (GuideTreeNode child : cat.getChildren()) {
+                if (child instanceof CustomCategory) {
+                    CustomCategory found = findCategoryByKey(Collections.singletonList((CustomCategory) child), key);
+                    if (found != null) return found;
+                }
+            }
+        }
+        return null;
     }
 
     int calculateMaxPage(List<GuideTreeNode> children) {

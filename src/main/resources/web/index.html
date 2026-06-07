@@ -44,6 +44,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <button class="btn btn-sm btn-accent" onclick="addCategory()">+ 分类</button>
         <button class="btn btn-sm btn-accent" onclick="addPlaceholder()">+ 占位</button>
         <button class="btn btn-sm btn-accent" onclick="addItem()">+ 物品</button>
+        <button class="btn btn-sm btn-accent" onclick="addReference()">+ 引用</button>
       </div>
       <div id="tree-scroll">
         <div id="tree-container">
@@ -99,6 +100,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
             <label>页码 (Page)</label>
             <input type="number" id="edit-page" min="1" onchange="updateSelection()" style="width:72px;">
           </div>
+        </div>
+        <div class="form-group" id="edit-ref-target" style="display:none;">
+          <label>引用目标 Key (Ref Target)</label>
+          <input type="text" id="edit-ref-target" onchange="updateSelection()" placeholder="目标分类的key">
+        </div>
+        <div class="form-group" id="edit-ref-mode" style="display:none;">
+          <label>引用模式 (Mode)</label>
+          <select id="edit-ref-mode" onchange="updateSelection()">
+            <option value="custom">custom (手动编辑属性)</option>
+            <option value="copy">copy (复制目标属性)</option>
+          </select>
         </div>
         <div class="form-group form-actions">
           <button class="btn btn-danger btn-sm" onclick="deleteSelected()">🗑 删除此项</button>

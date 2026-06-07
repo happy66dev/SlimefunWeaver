@@ -93,7 +93,8 @@ public final class CategoryConfigLoader {
 
     private static boolean isReservedKey(String key) {
         return key.equals("display") || key.equals("icon") || key.equals("lore")
-            || key.equals("page") || key.equals("slot") || key.equals("items");
+            || key.equals("page") || key.equals("slot") || key.equals("items")
+            || key.equals("glow") || key.equals("ref") || key.equals("mode");
     }
 
     private static IconSource parseIconSource(ConfigurationSection section, Logger logger, String context) {
@@ -140,6 +141,42 @@ public final class CategoryConfigLoader {
 
             } else if (placeholderObj instanceof Map) {
                 Map<?, ?> data = (Map<?, ?>) placeholderObj;
+                Object refObj = data.get("ref");
+
+                if (refObj != null) {
+                    String targetKey = refObj.toString();
+                    String mode = (String) data.get("mode");
+                    if (mode == null || mode.isEmpty()) mode = "custom";
+                    String refDisplay = (String) data.get("display");
+
+                    Object iconObj = data.get("icon");
+                    IconSource refIcon = null;
+                    if (iconObj instanceof Map) {
+                        Map<?, ?> iconData = (Map<?, ?>) iconObj;
+                        String typeStr = (String) iconData.get("type");
+                        String iconId = (String) iconData.get("id");
+                        if (typeStr != null && iconId != null) {
+                            try { refIcon = new IconSource(IconType.valueOf(typeStr.toUpperCase(Locale.ENGLISH)), iconId); }
+                            catch (IllegalArgumentException e) { logger.log(Level.WARNING, "Reference icon type invalid: {0}", typeStr); }
+                        }
+                    }
+                    if (refIcon == null) refIcon = new IconSource(IconType.VANILLA, "ARROW");
+
+                    List<String> refLore = new ArrayList<>();
+                    Object loreObj = data.get("lore");
+                    if (loreObj instanceof List) for (Object line : (List<?>) loreObj) if (line != null) refLore.add(line.toString());
+
+                    int refPage = Math.max(1, getInt(data, "page", 1));
+                    int refSlot = getInt(data, "slot", -1);
+                    if (refSlot < 0 || refSlot >= 36) {
+                        logger.log(Level.WARNING, "Reference [{0}] has invalid slot {1}, skipped", new Object[]{targetKey, refSlot});
+                        continue;
+                    }
+                    boolean refGlow = getBoolean(data, "glow", false);
+                    parent.addChild(new CustomReferenceEntry(targetKey, mode, refDisplay, refLore, refPage, refSlot, refGlow, refIcon));
+                    continue;
+                }
+
                 Object iconObj = data.get("icon");
                 if (!(iconObj instanceof Map)) {
                     logger.warning("Placeholder icon is not a map, skipped");
@@ -209,6 +246,8 @@ public final class CategoryConfigLoader {
                 childCats++;
                 calculateStatsRecursive((CustomCategory) child);
                 totalItems += ((CustomCategory) child).getTotalItemsCount();
+            } else if (child instanceof CustomReferenceEntry) {
+                childCats++;
             } else if (child instanceof CustomItemEntry) {
                 directItems++;
                 totalItems++;

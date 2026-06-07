@@ -16,5 +16,5 @@
 package cn.rmc.slimefunweaver.model;
 
 public enum TreeNodeType {
-    CATEGORY, ITEM, PLACEHOLDER
+    CATEGORY, ITEM, PLACEHOLDER, REFERENCE
 }

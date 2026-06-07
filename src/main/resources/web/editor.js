@@ -185,7 +185,7 @@ function renderTree() {
 
   var rootLi = document.createElement('li');
   rootLi.className = 'tree-root-entry';
-  rootLi.innerHTML = '<span class="tree-icon">🏠</span><span class="tree-label tree-root-label">[根级别]</span>';
+  rootLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">[根级别]</span>';
   rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
   if (state.selectedCategory === null) rootLi.classList.add('active');
   root.appendChild(rootLi);
@@ -241,7 +241,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var hasItems = cat.items && cat.items.length > 0;
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
-  var icon = '\u{1F4C1}';
+  var icon = '\u25b8';
   li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
@@ -258,7 +258,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
       var itemLi = document.createElement('li');
       itemLi.style.paddingLeft = ((depth + 1) * 14) + 'px';
       var itType = it.type || 'ITEM';
-      var itIcon = itType === 'PLACEHOLDER' ? '\u{1F3F7}' : (it.icon ? '\u{1F5BC}' : '\u{1F4E6}');
+      var itIcon = itType === 'REFERENCE' ? '\u21b3' : (itType === 'PLACEHOLDER' ? '\u25a2' : (it.icon ? '\u25a3' : '\u25a0'));
       var itLabel = it.display || it.id || it.key || '?';
       if (itType === 'PLACEHOLDER') itLabel = it.display || '(占位)';
       itemLi.innerHTML = '<span class="tree-icon" style="opacity:0.7">' + itIcon + '</span><span class="tree-label tree-item" title="' + MC.strip(itLabel) + '">' + MC.parseToHtml(itLabel) + '</span>';
@@ -333,7 +333,8 @@ function renderGrid() {
 
     if (item) {
       var typeLabel = '', typeClass = '';
-      if (item.type === 'PLACEHOLDER') { typeLabel = '占位'; typeClass = 'placeholder'; cell.setAttribute('data-placeholder',''); }
+      if (item.type === 'REFERENCE') { typeLabel = '\u21b3 ' + ((item.mode === 'copy') ? '引用(copy)' : '引用'); typeClass = 'category'; cell.setAttribute('data-reference',''); }
+      else if (item.type === 'PLACEHOLDER') { typeLabel = '占位'; typeClass = 'placeholder'; cell.setAttribute('data-placeholder',''); }
       else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); }
       else { typeLabel = '物品'; typeClass = 'item'; }
 
@@ -407,15 +408,30 @@ function renderEditor() {
   $('editor-empty').style.display = 'none';
 
   var isItem = node.type === 'ITEM';
+  var isRef = node.type === 'REFERENCE';
+  var isRefCopy = isRef && node.mode === 'copy';
+  var readOnly = isItem || isRefCopy;
 
   $('edit-display').value = node.display || '';
-  $('edit-display').disabled = isItem;
+  $('edit-display').disabled = readOnly;
   $('edit-lore').value = (node.lore || []).join('\n');
-  $('edit-lore').disabled = isItem;
+  $('edit-lore').disabled = readOnly;
   $('edit-glow').checked = !!node.glow;
-  $('edit-glow').disabled = isItem;
-  $('btn-pick-icon').style.display = isItem ? 'none' : '';
+  $('edit-glow').disabled = readOnly;
+  $('btn-pick-icon').style.display = readOnly && !isRef ? 'none' : '';
   $('edit-page').value = node.page || 1;
+
+  if (isRef) {
+    $('edit-ref-target').style.display = '';
+    $('edit-ref-target').value = node.ref || '';
+    $('edit-ref-target').disabled = isRefCopy;
+    $('edit-ref-mode').style.display = '';
+    $('edit-ref-mode').value = node.mode || 'custom';
+    $('edit-ref-mode').disabled = isRefCopy;
+  } else {
+    $('edit-ref-target').style.display = 'none';
+    $('edit-ref-mode').style.display = 'none';
+  }
 
   updateDisplayPreview();
   updateLorePreview();
@@ -423,6 +439,7 @@ function renderEditor() {
   var iconDisplay = '';
   if (node.icon) { iconDisplay = '[' + node.icon.type + '] ' + node.icon.id; }
   else if (node.id) { iconDisplay = '[ITEM] ' + node.id; }
+  else if (isRef) { iconDisplay = '[REF] \u21b3 ' + (node.ref || '?'); }
   else { iconDisplay = '(无图标)'; }
   $('edit-icon-display').textContent = iconDisplay;
 }
@@ -445,9 +462,13 @@ function updateSelection() {
   var node = state.selectedNode;
   if (!node) return;
   var isItem = node.type === 'ITEM';
-  if (!isItem) node.display = $('edit-display').value;
-  if (!isItem) node.lore = $('edit-lore').value.split('\n');
-  if (!isItem) node.glow = $('edit-glow').checked;
+  var isRef = node.type === 'REFERENCE';
+  var isRefCopy = isRef && node.mode === 'copy';
+  if (!isItem && !isRefCopy) node.display = $('edit-display').value;
+  if (!isItem && !isRefCopy) node.lore = $('edit-lore').value.split('\n');
+  if (!isItem && !isRefCopy) node.glow = $('edit-glow').checked;
+  if (isRef && !isRefCopy) node.ref = $('edit-ref-target').value;
+  if (isRef && !isRefCopy) node.mode = $('edit-ref-mode').value;
   node.page = parseInt($('edit-page').value) || 1;
   state.currentPage = node.page;
   updateDisplayPreview();
@@ -576,6 +597,22 @@ function addItem() {
   $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>';
   updatePickerFilterBtns();
   setTimeout(function() { input.focus(); }, 100);
+}
+
+function addReference() {
+  if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
+  if (state.selectedCategory === null) { Toast.show('根级别不能添加引用，请选择子分类', 'warning'); return; }
+  Dialog.prompt('请输入目标分类的 key:', '', function(key) {
+    if (!key || !key.trim()) return;
+    key = key.trim();
+    var newRef = { type: 'REFERENCE', ref: key, mode: 'custom', display: '', icon: { type: 'VANILLA', id: 'ARROW' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
+    if (!state.selectedCategory.items) state.selectedCategory.items = [];
+    state.selectedCategory.items.push(newRef);
+    markDirty();
+    renderGrid();
+    renderTree();
+    Toast.show('已添加引用: \u21b3 ' + key, 'success');
+  });
 }
 
 function openIconPicker() {

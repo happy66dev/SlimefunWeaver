@@ -84,6 +84,10 @@ public final class JsonUtil {
                 if (!first) sb.append(',');
                 appendPlaceholderEntry(sb, (CustomPlaceholderEntry) child);
                 first = false;
+            } else if (child.getType() == TreeNodeType.REFERENCE) {
+                if (!first) sb.append(',');
+                appendReferenceEntry(sb, (CustomReferenceEntry) child);
+                first = false;
             }
         }
         sb.append("]}");
@@ -104,6 +108,31 @@ public final class JsonUtil {
         String iconTypeName = iconSource != null ? iconSource.getType().name() : "VANILLA";
         String iconId = iconSource != null ? iconSource.getId() : "BOOK";
         sb.append("{\"type\":\"PLACEHOLDER\",");
+        appendString(sb, "display", entry.getDisplay());
+        sb.append(',');
+        sb.append("\"icon\":{\"type\":\"");
+        sb.append(escape(iconTypeName));
+        sb.append("\",\"id\":\"");
+        sb.append(escape(iconId));
+        sb.append("\"},");
+        sb.append("\"glow\":").append(entry.isGlow()).append(',');
+        appendStrings(sb, "lore", entry.getLore());
+        sb.append(',');
+        sb.append("\"page\":").append(entry.getPage()).append(',');
+        sb.append("\"slot\":").append(entry.getSlot()).append('}');
+    }
+
+    private static void appendReferenceEntry(StringBuilder sb, CustomReferenceEntry entry) {
+        IconSource iconSource = entry.getIconSource();
+        String iconTypeName = iconSource != null ? iconSource.getType().name() : "VANILLA";
+        String iconId = iconSource != null ? iconSource.getId() : "ARROW";
+        sb.append("{\"type\":\"REFERENCE\",");
+        sb.append("\"ref\":\"");
+        sb.append(escape(entry.getTargetCategoryKey()));
+        sb.append("\",");
+        sb.append("\"mode\":\"");
+        sb.append(escape(entry.getMode()));
+        sb.append("\",");
         appendString(sb, "display", entry.getDisplay());
         sb.append(',');
         sb.append("\"icon\":{\"type\":\"");

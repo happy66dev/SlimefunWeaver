@@ -262,7 +262,32 @@ public class WebApiHandler implements HttpHandler {
                 if (!itemElem.isJsonObject()) continue;
                 JsonObject itemObj = itemElem.getAsJsonObject();
                 String type = itemObj.has("type") ? itemObj.get("type").getAsString() : "ITEM";
-                if ("PLACEHOLDER".equals(type)) {
+                if ("REFERENCE".equals(type)) {
+                    Map<String, Object> ph = new LinkedHashMap<>();
+                    Map<String, Object> refData = new LinkedHashMap<>();
+                    if (itemObj.has("ref")) refData.put("ref", itemObj.get("ref").getAsString());
+                    if (itemObj.has("mode")) refData.put("mode", itemObj.get("mode").getAsString());
+                    if (itemObj.has("display") && !itemObj.get("display").isJsonNull())
+                        refData.put("display", itemObj.get("display").getAsString());
+                    if (itemObj.has("glow") && !itemObj.get("glow").isJsonNull() && itemObj.get("glow").getAsBoolean())
+                        refData.put("glow", true);
+                    if (itemObj.has("icon") && itemObj.get("icon").isJsonObject()) {
+                        JsonObject rIcon = itemObj.getAsJsonObject("icon");
+                        Map<String, Object> iconMap = new LinkedHashMap<>();
+                        if (rIcon.has("type")) iconMap.put("type", rIcon.get("type").getAsString());
+                        if (rIcon.has("id")) iconMap.put("id", rIcon.get("id").getAsString());
+                        refData.put("icon", iconMap);
+                    }
+                    if (itemObj.has("lore") && itemObj.get("lore").isJsonArray()) {
+                        List<String> rLore = new ArrayList<>();
+                        for (JsonElement e : itemObj.getAsJsonArray("lore")) if (e.isJsonPrimitive()) rLore.add(e.getAsString());
+                        if (!rLore.isEmpty()) refData.put("lore", rLore);
+                    }
+                    if (itemObj.has("page")) refData.put("page", itemObj.get("page").getAsInt());
+                    if (itemObj.has("slot")) refData.put("slot", itemObj.get("slot").getAsInt());
+                    ph.put("placeholder", refData);
+                    itemList.add(ph);
+                } else if ("PLACEHOLDER".equals(type)) {
                     Map<String, Object> ph = new LinkedHashMap<>();
                     Map<String, Object> phIcon = new LinkedHashMap<>();
                     if (itemObj.has("icon") && itemObj.get("icon").isJsonObject()) {

@@ -261,6 +261,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
       var itIcon = itType === 'REFERENCE' ? '\u21b3' : (itType === 'PLACEHOLDER' ? '\u25a2' : (it.icon ? '\u25a3' : '\u25a0'));
       var itLabel = it.display || it.id || it.key || '?';
       if (itType === 'PLACEHOLDER') itLabel = it.display || '(占位)';
+      if (itType === 'REFERENCE') itLabel = it.display || '\u21b3 ' + (it.ref || '?');
       itemLi.innerHTML = '<span class="tree-icon" style="opacity:0.7">' + itIcon + '</span><span class="tree-label tree-item" title="' + MC.strip(itLabel) + '">' + MC.parseToHtml(itLabel) + '</span>';
       itemLi.onclick = function(e) { e.stopPropagation(); selectGridItem(it, ii); };
       if (state.selectedNode === it) itemLi.classList.add('active');
@@ -340,6 +341,7 @@ function renderGrid() {
 
       var displayName = item.display || item.id || item.key || '?';
       if (typeClass === 'item') displayName = item.display || item.id || '?';
+      if (item.type === 'REFERENCE') displayName = item.display || '\u21b3 ' + (item.ref || '?');
       cell.innerHTML = '<span class="cell-type-badge ' + typeClass + '">' + typeLabel + '</span><span class="cell-name">' + MC.parseToHtml(displayName) + '</span>';
       if (state.selectedNode === item) cell.classList.add('selected');
 
@@ -711,8 +713,14 @@ function moveToPage() {
 
 var searchTimer = null;
 var refCategoryResults = [];
+var refSearchTimer = null;
 
 function searchReferenceCategories() {
+  if (refSearchTimer) clearTimeout(refSearchTimer);
+  refSearchTimer = setTimeout(doRefSearch, 200);
+}
+
+function doRefSearch() {
   var q = ($('picker-search').value || '').toLowerCase().trim();
   refCategoryResults = [];
   collectAllCategories(state.categories, [], q);
@@ -763,14 +771,17 @@ function pickRefCategory(index) {
   var cat = r.cat;
   var key = cat.key;
   if (!key) return;
-  var newRef = { type: 'REFERENCE', ref: key, mode: 'custom', display: '', icon: { type: 'VANILLA', id: 'ARROW' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
+  var pathParts = r.breadcrumb.map(function(bc) { return bc.key; });
+  pathParts.push(key);
+  var refPath = pathParts.join('/');
+  var newRef = { type: 'REFERENCE', ref: refPath, mode: 'custom', display: '', icon: { type: 'VANILLA', id: 'ARROW' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
   if (!state.selectedCategory.items) state.selectedCategory.items = [];
   state.selectedCategory.items.push(newRef);
   closePicker();
   markDirty();
   renderGrid();
   renderTree();
-  Toast.show('已添加引用: \u21b3 ' + (cat.display || key), 'success');
+  Toast.show('已添加引用: \u21b3 ' + refPath, 'success');
 }
 
 async function searchMaterials() {

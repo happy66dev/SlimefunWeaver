@@ -104,9 +104,9 @@ categories:
     page: 1
     items:
       - type: REFERENCE
-        ref: 发电机           # 目标分类的 key
-        mode: custom          # copy=复制属性 / custom=手动编辑
-        display: "&6→ 查看发电机"
+    ref: 机器/发电机       # 目标分类的层级路径 (父/子)
+    mode: custom           # copy=复制属性 / custom=手动编辑
+    display: "&6↳ 查看发电机"
         icon: {type: VANILLA, id: ARROW}
         slot: 5
 ```

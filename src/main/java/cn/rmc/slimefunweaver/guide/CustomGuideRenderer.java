@@ -46,7 +46,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -340,16 +339,27 @@ public class CustomGuideRenderer {
     }
 
     private static CustomCategory findCategoryByKey(List<CustomCategory> roots, String key) {
-        for (CustomCategory cat : roots) {
-            if (cat.getKey().equals(key)) return cat;
-            for (GuideTreeNode child : cat.getChildren()) {
-                if (child instanceof CustomCategory) {
-                    CustomCategory found = findCategoryByKey(Collections.singletonList((CustomCategory) child), key);
-                    if (found != null) return found;
+        String[] parts = key.split("/");
+        List<CustomCategory> currentLevel = roots;
+        CustomCategory found = null;
+        for (int pi = 0; pi < parts.length; pi++) {
+            String part = parts[pi];
+            boolean matched = false;
+            for (CustomCategory cat : currentLevel) {
+                if (cat.getKey().equals(part)) {
+                    matched = true;
+                    found = cat;
+                    List<CustomCategory> children = new ArrayList<>();
+                    for (GuideTreeNode child : cat.getChildren()) {
+                        if (child instanceof CustomCategory) children.add((CustomCategory) child);
+                    }
+                    currentLevel = children;
+                    break;
                 }
             }
+            if (!matched) return null;
         }
-        return null;
+        return found;
     }
 
     int calculateMaxPage(List<GuideTreeNode> children) {

@@ -17,6 +17,7 @@ package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
 import cn.rmc.slimefunweaver.util.IconParser;
+import cn.rmc.slimefunweaver.util.VanillaMaterialLocalization;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -29,7 +30,9 @@ import org.bukkit.inventory.ItemStack;
 
 import java.io.*;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.logging.Level;
@@ -39,6 +42,58 @@ public class RecipeApiHandler implements HttpHandler {
     private static SlimefunWeaver plugin;
     private static YamlConfiguration storedRecipes;
     private final String recipesHtml;
+
+    private static final Set<String> BUILTIN_RECIPE_TYPES = new LinkedHashSet<>();
+    static {
+        BUILTIN_RECIPE_TYPES.add("slimefun:enhanced_crafting_table");
+        BUILTIN_RECIPE_TYPES.add("slimefun:armor_forge");
+        BUILTIN_RECIPE_TYPES.add("slimefun:grind_stone");
+        BUILTIN_RECIPE_TYPES.add("slimefun:smeltery");
+        BUILTIN_RECIPE_TYPES.add("slimefun:ore_crusher");
+        BUILTIN_RECIPE_TYPES.add("slimefun:compressor");
+        BUILTIN_RECIPE_TYPES.add("slimefun:pressure_chamber");
+        BUILTIN_RECIPE_TYPES.add("slimefun:magic_workbench");
+        BUILTIN_RECIPE_TYPES.add("slimefun:gold_pan");
+        BUILTIN_RECIPE_TYPES.add("slimefun:juicer");
+        BUILTIN_RECIPE_TYPES.add("slimefun:ancient_altar");
+        BUILTIN_RECIPE_TYPES.add("slimefun:heated_pressure_chamber");
+        BUILTIN_RECIPE_TYPES.add("slimefun:ore_washer");
+        BUILTIN_RECIPE_TYPES.add("slimefun:table_saw");
+        BUILTIN_RECIPE_TYPES.add("slimefun:freezer");
+        BUILTIN_RECIPE_TYPES.add("slimefun:food_fabricator");
+        BUILTIN_RECIPE_TYPES.add("slimefun:food_composter");
+        BUILTIN_RECIPE_TYPES.add("slimefun:reactor");
+        BUILTIN_RECIPE_TYPES.add("slimefun:refinery");
+        BUILTIN_RECIPE_TYPES.add("slimefun:automated_panning_machine");
+        BUILTIN_RECIPE_TYPES.add("slimefun:miner_android");
+        BUILTIN_RECIPE_TYPES.add("slimefun:fisherman_android");
+        BUILTIN_RECIPE_TYPES.add("slimefun:geo_miner");
+        BUILTIN_RECIPE_TYPES.add("slimefun:oil_pump");
+        BUILTIN_RECIPE_TYPES.add("slimefun:nuclear_reactor");
+    }
+
+    private static final Set<String> TIMED_RECIPE_TYPES = new HashSet<>();
+    static {
+        TIMED_RECIPE_TYPES.add("slimefun:smeltery");
+        TIMED_RECIPE_TYPES.add("slimefun:ore_crusher");
+        TIMED_RECIPE_TYPES.add("slimefun:compressor");
+        TIMED_RECIPE_TYPES.add("slimefun:pressure_chamber");
+        TIMED_RECIPE_TYPES.add("slimefun:heated_pressure_chamber");
+        TIMED_RECIPE_TYPES.add("slimefun:grind_stone");
+        TIMED_RECIPE_TYPES.add("slimefun:juicer");
+        TIMED_RECIPE_TYPES.add("slimefun:freezer");
+        TIMED_RECIPE_TYPES.add("slimefun:food_fabricator");
+        TIMED_RECIPE_TYPES.add("slimefun:food_composter");
+        TIMED_RECIPE_TYPES.add("slimefun:reactor");
+        TIMED_RECIPE_TYPES.add("slimefun:refinery");
+        TIMED_RECIPE_TYPES.add("slimefun:oil_pump");
+        TIMED_RECIPE_TYPES.add("slimefun:geo_miner");
+        TIMED_RECIPE_TYPES.add("slimefun:miner_android");
+        TIMED_RECIPE_TYPES.add("slimefun:fisherman_android");
+        TIMED_RECIPE_TYPES.add("slimefun:ore_washer");
+        TIMED_RECIPE_TYPES.add("slimefun:table_saw");
+        TIMED_RECIPE_TYPES.add("slimefun:nuclear_reactor");
+    }
 
     public RecipeApiHandler(SlimefunWeaver plugin) {
         RecipeApiHandler.plugin = plugin;
@@ -75,6 +130,9 @@ public class RecipeApiHandler implements HttpHandler {
                 serveHtml(exchange, recipesHtml);
             } else if (path.equals("/api/recipes")) {
                 handleRecipes(exchange, method);
+            } else if (path.equals("/api/recipes/materials")) {
+                if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+                handleMaterials(exchange);
             } else if (path.equals("/api/recipe-types")) {
                 if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
                 serveJson(exchange, buildRecipeTypesJson());
@@ -85,6 +143,47 @@ public class RecipeApiHandler implements HttpHandler {
             plugin.getLogger().log(Level.WARNING, "Recipe API error", e);
             try { exchange.sendResponseHeaders(500, -1); } catch (IOException ignored) {}
         }
+    }
+
+    private void handleMaterials(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String q = "";
+        if (query != null) {
+            for (String p : query.split("&")) {
+                if (p.startsWith("q=")) q = URLDecoder.decode(p.substring(2), "UTF-8").toLowerCase(Locale.ROOT).trim();
+            }
+        }
+        StringBuilder sb = new StringBuilder("{\"results\":[");
+        boolean first = true;
+        int count = 0;
+        int max = q.isEmpty() ? 0 : 80;
+
+        for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
+            String id = item.getId().toLowerCase(Locale.ROOT);
+            String name = item.getItemName();
+            String nameLower = name != null ? org.bukkit.ChatColor.stripColor(name).toLowerCase(Locale.ROOT) : "";
+            if (!q.isEmpty() && !id.contains(q) && !nameLower.contains(q)) continue;
+            if (!first) sb.append(','); first = false;
+            sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(escapeJson(item.getId())).append("\",\"display\":\"")
+              .append(escapeJson(nameLower.isEmpty() ? item.getId() : org.bukkit.ChatColor.stripColor(name)))
+              .append("\"}");
+            count++;
+        }
+
+        for (Material mat : Material.values()) {
+            if (!mat.isItem() || mat.isAir() || mat.isLegacy()) continue;
+            String matName = mat.name().toLowerCase(Locale.ROOT);
+            String displayName = VanillaMaterialLocalization.getItemName(mat);
+            String displayLower = displayName.toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !matName.contains(q) && !displayLower.contains(q)) continue;
+            if (count >= max) break;
+            if (!first) sb.append(','); first = false;
+            sb.append("{\"type\":\"VANILLA\",\"id\":\"").append(escapeJson(mat.name())).append("\",\"display\":\"")
+              .append(escapeJson(displayName)).append("\"}");
+            count++;
+        }
+        sb.append("]}");
+        serveJson(exchange, sb.toString());
     }
 
     private String loadFileFromJar(String path) {
@@ -133,25 +232,31 @@ public class RecipeApiHandler implements HttpHandler {
     private String buildRecipeTypesJson() {
         StringBuilder sb = new StringBuilder("{\"types\":[");
         boolean first = true;
+        Map<String, RecipeType> resolved = resolveBuiltinTypes();
 
-        for (Map.Entry<String, RecipeTypeInfo> e : collectRecipeTypes().entrySet()) {
+        for (String key : BUILTIN_RECIPE_TYPES) {
             if (!first) sb.append(','); first = false;
-            RecipeTypeInfo info = e.getValue();
-            sb.append('{');
-            appendString(sb, "key", info.key);
-            sb.append(',');
-            appendString(sb, "name", info.name);
-            sb.append(',');
-            sb.append("\"slots\":").append(info.slots);
-            sb.append('}');
+            RecipeType rt = resolved.get(key);
+            String name = key;
+            int slots = guessSlots(key);
+            int cols = guessCols(slots);
+            if (rt != null) {
+                name = readDisplayName(rt, key);
+            }
+            sb.append("{\"key\":\"").append(escapeJson(key)).append("\",")
+              .append("\"name\":\"").append(escapeJson(name)).append("\",")
+              .append("\"slots\":").append(slots).append(",")
+              .append("\"cols\":").append(cols).append(",")
+              .append("\"hasTime\":").append(TIMED_RECIPE_TYPES.contains(key))
+              .append("}");
         }
-
         sb.append("]}");
         return sb.toString();
     }
 
     private String buildRecipesJson() {
-        Map<String, RecipeTypeInfo> types = collectRecipeTypes();
+        Map<String, RecipeType> resolved = resolveBuiltinTypes();
+
         StringBuilder sb = new StringBuilder("{\"items\":{");
         boolean firstItem = true;
 
@@ -189,20 +294,12 @@ public class RecipeApiHandler implements HttpHandler {
                     for (Map<?, ?> r : recipes) {
                         if (hasStored) sb.append(',');
                         hasStored = true;
-                        sb.append("{\"type\":\"").append(escapeJson(String.valueOf(r.get("type")))).append("\",")
-                          .append("\"input\":[").append(jsonStringList((List<?>) r.get("input"))).append("],")
-                          .append("\"output\":\"").append(escapeJson(String.valueOf(r.get("output")))).append("\",")
-                          .append("\"outputAmount\":").append(toInt(r.get("output-amount"), 1)).append("}");
+                        sb.append(recipeToJson(r, id));
                     }
                 }
             }
             if (!hasStored && rtKey != null) {
-                List<String> inputIds = new ArrayList<>();
-                for (ItemStack stack : recipe) inputIds.add(itemIdFromStack(stack));
-                sb.append("{\"type\":\"").append(escapeJson(rtKey)).append("\",")
-                  .append("\"input\":[").append(jsonStringListCast(inputIds)).append("],")
-                  .append("\"output\":\"").append(escapeJson(id)).append("\",")
-                  .append("\"outputAmount\":1}");
+                sb.append(defaultRecipeJson(id, rtKey, recipe));
             }
             sb.append(']');
             sb.append('}');
@@ -210,19 +307,67 @@ public class RecipeApiHandler implements HttpHandler {
 
         sb.append("},\"recipeTypes\":[");
         boolean firstType = true;
-        for (Map.Entry<String, RecipeTypeInfo> e : types.entrySet()) {
+        for (String key : BUILTIN_RECIPE_TYPES) {
             if (!firstType) sb.append(','); firstType = false;
-            RecipeTypeInfo info = e.getValue();
-            sb.append("{\"key\":\"").append(escapeJson(info.key)).append("\",")
-              .append("\"name\":\"").append(escapeJson(info.name)).append("\",")
-              .append("\"slots\":").append(info.slots).append("}");
+            RecipeType rt = resolved.get(key);
+            String name = key;
+            int slots = guessSlots(key);
+            int cols = guessCols(slots);
+            if (rt != null) name = readDisplayName(rt, key);
+            sb.append("{\"key\":\"").append(escapeJson(key)).append("\",")
+              .append("\"name\":\"").append(escapeJson(name)).append("\",")
+              .append("\"slots\":").append(slots).append(",")
+              .append("\"cols\":").append(cols).append(",")
+              .append("\"hasTime\":").append(TIMED_RECIPE_TYPES.contains(key))
+              .append("}");
         }
         sb.append("]}");
 
         return sb.toString();
     }
 
+    private String defaultRecipeJson(String itemId, String rtKey, ItemStack[] recipe) {
+        List<String> inputIds = new ArrayList<>();
+        for (ItemStack stack : recipe) inputIds.add(itemIdFromStack(stack));
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"").append(escapeJson(rtKey)).append("\",")
+          .append("\"input\":[").append(jsonStringListCast(inputIds)).append("],")
+          .append("\"output\":\"").append(escapeJson(itemId)).append("\",")
+          .append("\"outputAmount\":1,\"processingTime\":0}");
+        return sb.toString();
+    }
+
+    private String recipeToJson(Map<?, ?> r, String fallbackId) {
+        String type = String.valueOf(r.get("type"));
+        List<?> inputList = (List<?>) r.get("input");
+        String output = String.valueOf(r.get("output"));
+        int amount = toInt(r.get("output-amount"), 1);
+        int time = toInt(r.get("processing-time"), 0);
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"").append(escapeJson(type)).append("\",")
+          .append("\"input\":[").append(jsonStringList(inputList)).append("],")
+          .append("\"output\":\"").append(escapeJson(output)).append("\",")
+          .append("\"outputAmount\":").append(amount).append(",")
+          .append("\"processingTime\":").append(time).append("}");
+        return sb.toString();
+    }
+
     private static Map<String, RecipeType> recipeTypeCache = Collections.emptyMap();
+
+    private static Map<String, RecipeType> resolveBuiltinTypes() {
+        Map<String, RecipeType> map = new LinkedHashMap<>();
+        for (Field f : RecipeType.class.getDeclaredFields()) {
+            if (!Modifier.isStatic(f.getModifiers()) || !Modifier.isPublic(f.getModifiers())) continue;
+            if (!RecipeType.class.isAssignableFrom(f.getType())) continue;
+            try {
+                RecipeType rt = (RecipeType) f.get(null);
+                String k = rt.getKey().toString();
+                if (BUILTIN_RECIPE_TYPES.contains(k)) map.put(k, rt);
+            } catch (Exception ignored) {}
+        }
+        recipeTypeCache = map;
+        return map;
+    }
 
     private static class StoredRecipesSection {
         final ConfigurationSection section;
@@ -341,6 +486,8 @@ public class RecipeApiHandler implements HttpHandler {
                     if (output != null) map.put("output", output);
                     Integer outAmt = extractJsonInt(rj, "outputAmount");
                     map.put("output-amount", outAmt != null ? outAmt : 1);
+                    Integer time = extractJsonInt(rj, "processingTime");
+                    if (time != null && time > 0) map.put("processing-time", time);
                     recipeList.add(map);
                     objStart = -1;
                 }
@@ -357,6 +504,8 @@ public class RecipeApiHandler implements HttpHandler {
         ConfigurationSection root = storedRecipes.getConfigurationSection("slimefun");
         if (root == null) return;
 
+        Map<String, RecipeType> resolved = resolveBuiltinTypes();
+
         for (String itemId : root.getKeys(false)) {
             SlimefunItem item = IconParser.findSlimefunItem(itemId);
             if (item == null) continue;
@@ -367,7 +516,7 @@ public class RecipeApiHandler implements HttpHandler {
 
             Map<?, ?> first = recipes.get(0);
             String typeKey = String.valueOf(first.get("type"));
-            RecipeType rt = findRecipeTypeByKey(typeKey);
+            RecipeType rt = findRecipeTypeByKey(typeKey, resolved);
             if (rt == null) continue;
 
             Object inputObj = first.get("input");
@@ -389,6 +538,14 @@ public class RecipeApiHandler implements HttpHandler {
             item.setRecipeType(rt);
             item.setRecipe(inputStacks);
             item.setRecipeOutput(outputStack);
+
+            int processingTime = toInt(first.get("processing-time"), 0);
+            if (processingTime > 0 && TIMED_RECIPE_TYPES.contains(typeKey)) {
+                try {
+                    Method setProcessingTime = item.getClass().getMethod("setProcessingTime", int.class);
+                    setProcessingTime.invoke(item, processingTime);
+                } catch (Exception ignored) {}
+            }
         }
 
         plugin.getLogger().info("Recipes applied in real-time");
@@ -411,8 +568,8 @@ public class RecipeApiHandler implements HttpHandler {
         return stack.getType().name();
     }
 
-    private static RecipeType findRecipeTypeByKey(String key) {
-        RecipeType cached = recipeTypeCache.get(key);
+    private static RecipeType findRecipeTypeByKey(String key, Map<String, RecipeType> resolved) {
+        RecipeType cached = resolved.get(key);
         if (cached != null) return cached;
 
         for (Field f : RecipeType.class.getDeclaredFields()) {
@@ -426,47 +583,38 @@ public class RecipeApiHandler implements HttpHandler {
         return null;
     }
 
-    private static class RecipeTypeInfo {
-        final String key, name;
-        final int slots;
-        RecipeTypeInfo(String k, String n, int s) { key = k; name = n; slots = s; }
-    }
-
-    private Map<String, RecipeTypeInfo> collectRecipeTypes() {
-        Map<String, RecipeTypeInfo> map = new LinkedHashMap<>();
-        Map<String, RecipeType> cache = new LinkedHashMap<>();
-        Set<String> seen = new HashSet<>();
-
-        for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
-            RecipeType rt = item.getRecipeType();
-            if (rt == null) continue;
-            String k = rt.getKey().toString();
-            cache.putIfAbsent(k, rt);
-            if (!seen.add(k)) continue;
-            String name = null;
-            ItemStack recipeTypeItem = rt.toItem();
-            if (recipeTypeItem != null && recipeTypeItem.hasItemMeta() && recipeTypeItem.getItemMeta().hasLore()) {
-                for (String lore : recipeTypeItem.getItemMeta().getLore()) {
-                    if (lore != null && !lore.trim().isEmpty()) { name = org.bukkit.ChatColor.stripColor(lore.trim()); break; }
+    private String readDisplayName(RecipeType rt, String key) {
+        try {
+            ItemStack rtItem = rt.toItem();
+            if (rtItem != null && rtItem.hasItemMeta() && rtItem.getItemMeta().hasLore()) {
+                for (String lore : rtItem.getItemMeta().getLore()) {
+                    if (lore != null && !lore.trim().isEmpty())
+                        return org.bukkit.ChatColor.stripColor(lore.trim());
                 }
             }
-            if (name == null || name.isEmpty()) name = k;
-            int slots = guessSlots(k);
-            map.put(k, new RecipeTypeInfo(k, name, slots));
-        }
-
-        recipeTypeCache = cache;
-        return map;
+        } catch (Exception ignored) {}
+        String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
+        return shortKey.replace('_', ' ');
     }
 
-    private int guessSlots(String key) {
+    private static int guessSlots(String key) {
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
         switch (shortKey) {
             case "enhanced_crafting_table": case "armor_forge": case "magic_workbench":
             case "ancient_altar": return 9;
-            case "smeltery": case "heated_pressure_chamber": return 2;
+            case "smeltery": case "heated_pressure_chamber": case "ore_crusher":
+            case "compressor": case "grind_stone": case "juicer": case "gold_pan":
+            case "freezer": case "food_fabricator": case "food_composter":
+            case "reactor": case "refinery": case "pressure_chamber": case "table_saw":
+                return 2;
             default: return 1;
         }
+    }
+
+    private static int guessCols(int slots) {
+        if (slots == 9) return 3;
+        if (slots == 2) return 2;
+        return 1;
     }
 
     private static String extractJsonArray(String json, String key) {

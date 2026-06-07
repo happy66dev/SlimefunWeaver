@@ -46,6 +46,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -344,8 +345,15 @@ public class CustomGuideRenderer {
         }
 
         List<String> resolvedLore;
-        if (useTarget && !entry.hasCustomLore()) {
-            resolvedLore = target.getLore();
+        if (entry.hasCustomLore()) {
+            resolvedLore = entry.getRawLore();
+        } else if (useTarget) {
+            List<String> rawTargetLore = target.getLore();
+            if (!rawTargetLore.isEmpty()) {
+                resolvedLore = PlaceholderResolver.resolve(target, 1, calculateMaxPage(target.getChildren()));
+            } else {
+                resolvedLore = Collections.emptyList();
+            }
         } else {
             resolvedLore = entry.getRawLore();
         }

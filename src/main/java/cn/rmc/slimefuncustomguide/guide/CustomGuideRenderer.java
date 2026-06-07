@@ -140,7 +140,7 @@ public class CustomGuideRenderer {
             menu.addItem(slot,
                     new CustomItemStack(ChestMenuUtils.getBackButton(player, "",
                             "&f\u5de6\u952e: &7\u8fd4\u56de\u4e0a\u4e00\u9875",
-                            "&fShift + \u5de6\u952e: &7\u8fd4\u56de\u4e3b\u83dc\u5355")));
+                            "&fShift + \u5de6\u952e: &7\u8fd4\u56de\u6839\u76ee\u5f55")));
             menu.addMenuClickHandler(slot, (pl, s1, is1, action1) -> {
                 if (action1.isShiftClicked()) {
                     CustomGuidePlugin.debug(pl, "BACK click: shift-click, clearing history to main menu");

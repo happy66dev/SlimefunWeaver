@@ -251,24 +251,24 @@ function selectRoot() {
   renderEditor();
 }
 
-var dblClickTimer = null;
-var dblClickTarget = null;
+var dblClickPending = null;
 
-function handleCategoryClick(cat, index, parentRef) {
-  if (dblClickTimer && dblClickTarget === cat) {
-    clearTimeout(dblClickTimer);
-    dblClickTimer = null;
-    dblClickTarget = null;
-    enterCategory(cat, index, parentRef);
-  } else {
-    if (dblClickTimer) clearTimeout(dblClickTimer);
-    dblClickTarget = cat;
-    selectCategory(cat, index, parentRef);
-    dblClickTimer = setTimeout(function() {
-      dblClickTimer = null;
-      dblClickTarget = null;
-    }, 500);
-  }
+function handleCatClick(cat, index, parentRef, li) {
+  state.selectedNode = cat;
+  state.selectedCategory = cat;
+  state.currentPage = 1;
+  if (dblClickPending) clearTimeout(dblClickPending);
+  dblClickPending = setTimeout(function() {
+    dblClickPending = null;
+    renderGrid();
+    renderEditor();
+  }, 350);
+}
+
+function handleCatDblClick(cat, index, parentRef) {
+  if (dblClickPending) clearTimeout(dblClickPending);
+  dblClickPending = null;
+  enterCategory(cat, index, parentRef);
 }
 
 function filterTree() {
@@ -311,7 +311,8 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var icon = '\u25b8';
   li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + ' (双击进入)">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
-  li.onclick = function(e) { e.stopPropagation(); handleCategoryClick(cat, index, parentRef); };
+  li.onclick = function(e) { e.stopPropagation(); handleCatClick(cat, index, parentRef, li); };
+  li.ondblclick = function(e) { e.stopPropagation(); handleCatDblClick(cat, index, parentRef); };
   li.title = '\u5355\u51FB\u9009\u4E2D \u00B7 \u53CC\u51FB\u8FDB\u5165\u5B50\u7EA7';
   if (state.selectedNode === cat) li.classList.add('active');
 
@@ -350,7 +351,10 @@ function selectCategory(cat, index, parentRef) {
 }
 
 function enterCategory(cat, index, parentRef) {
-  if (!cat.children || cat.children.length === 0) return;
+  if (!cat.children || cat.children.length === 0) {
+    Toast.show('该分类无子分类', 'info');
+    return;
+  }
   var fullPath = findPathToCategory(cat);
   if (fullPath === null) return;
   state.treeRootIndex = fullPath;

@@ -46,6 +46,7 @@ public class ResearchApiHandler implements HttpHandler {
             String method = exchange.getRequestMethod();
 
             if (path.equals("/editor.html")) {
+                if (!WebSecurity.isAccessAllowed(plugin, exchange)) { redirectToLogin(exchange); return; }
                 serveHtml(exchange, editorHtml);
             } else if (path.equals("/api/researches")) {
                 handleResearches(exchange, method);
@@ -79,7 +80,7 @@ public class ResearchApiHandler implements HttpHandler {
     private void serveHtml(HttpExchange exchange, String html) throws IOException {
         byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
-        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
     }
@@ -92,21 +93,21 @@ public class ResearchApiHandler implements HttpHandler {
         try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
     }
 
-    private String readBody(HttpExchange exchange) throws IOException {
-        try (InputStream in = exchange.getRequestBody()) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            byte[] buf = new byte[4096];
-            int n;
-            while ((n = in.read(buf)) != -1) baos.write(buf, 0, n);
-            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
-        }
+    private void redirectToLogin(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        exchange.getResponseHeaders().set("Location", "/?redirect=" + path.substring(1));
+        exchange.sendResponseHeaders(302, -1);
     }
 
     private void handleResearches(HttpExchange exchange, String method) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
         if ("GET".equalsIgnoreCase(method)) {
             serveJson(exchange, buildResearchesJson());
         } else if ("PUT".equalsIgnoreCase(method)) {
-            String body = readBody(exchange);
+            if (!WebSecurity.isWriteAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+            String body;
+            try { body = WebSecurity.readBody(exchange); }
+            catch (WebSecurity.BodyTooLargeException e) { exchange.sendResponseHeaders(413, -1); return; }
             if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
             saveResearchesFromJson(body);
             serveJson(exchange, "{\"ok\":true}");
@@ -116,6 +117,7 @@ public class ResearchApiHandler implements HttpHandler {
     }
 
     private void handleSlimefunItems(HttpExchange exchange) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
         String query = exchange.getRequestURI().getQuery(), q = "";
         if (query != null) {
             for (String param : query.split("&")) {
@@ -152,7 +154,9 @@ public class ResearchApiHandler implements HttpHandler {
         Map<String, String> itemToResearch = new LinkedHashMap<>();
         for (Research r : Slimefun.getRegistry().getResearches()) {
             if (!r.isEnabled()) continue;
-            for (SlimefunItem item : r.getAffectedItems()) itemToResearch.put(item.getId(), r.getKey().toString());
+            List<SlimefunItem> affectedItems = r.getAffectedItems();
+            if (affectedItems == null) continue;
+            for (SlimefunItem item : affectedItems) itemToResearch.put(item.getId(), r.getKey().toString());
         }
         StringBuilder sb = new StringBuilder("{\"researches\":["); boolean firstR = true;
         for (Research r : Slimefun.getRegistry().getResearches()) {
@@ -170,6 +174,7 @@ public class ResearchApiHandler implements HttpHandler {
             sb.append("\"enabled\":").append(r.isEnabled()).append(',');
 
             List<SlimefunItem> items = r.getAffectedItems();
+            if (items == null) items = Collections.emptyList();
             sb.append("\"items\":["); boolean firstI = true;
             for (SlimefunItem it : items) {
                 if (!firstI) sb.append(','); firstI = false;
@@ -179,6 +184,7 @@ public class ResearchApiHandler implements HttpHandler {
             sb.append("],");
 
             List<SlimefunItem> needItems = r.getNeedUnlockedItems();
+            if (needItems == null) needItems = Collections.emptyList();
             sb.append("\"needUnlockedItems\":["); boolean firstN = true;
             for (SlimefunItem it : needItems) {
                 if (!firstN) sb.append(','); firstN = false;

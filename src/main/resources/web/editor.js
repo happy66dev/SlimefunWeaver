@@ -78,6 +78,18 @@ var MC = {
   }
 };
 
+var API_TOKEN = sessionStorage.getItem('scg_token') || '';
+if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
+var nativeFetch = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  init = init || {};
+  init.headers = init.headers || {};
+  if (API_TOKEN) {
+    init.headers['X-SlimefunCustomGuide-Token'] = API_TOKEN;
+  }
+  return nativeFetch(input, init);
+};
+
 var Toast = {
   show: function(msg, type, duration) {
     type = type || 'info'; duration = duration || 2600;
@@ -124,18 +136,10 @@ var Dialog = {
 
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
-  currentPage: 1, pickerTarget: null, dirty: false
+  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all'
 };
 
 function $(id) { return document.getElementById(id); }
-
-function isRootCategory(node) {
-  if (!node || !state.categories) return false;
-  for (var i = 0; i < state.categories.length; i++) {
-    if (state.categories[i] === node) return true;
-  }
-  return false;
-}
 
 function markDirty() {
   if (!state.dirty) { state.dirty = true; updateSaveStatus(); }
@@ -178,8 +182,56 @@ async function discardChanges() {
 function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
+
+  var rootLi = document.createElement('li');
+  rootLi.className = 'tree-root-entry';
+  rootLi.innerHTML = '<span class="tree-icon">🏠</span><span class="tree-label tree-root-label">[根级别]</span>';
+  rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
+  if (state.selectedCategory === null) rootLi.classList.add('active');
+  root.appendChild(rootLi);
+
   var cats = state.categories || [];
   cats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, 0)); });
+  applyTreeFilter();
+}
+
+function selectRoot() {
+  state.selectedCategory = null;
+  state.selectedNode = null;
+  state.currentPage = 1;
+  renderTree();
+  renderGrid();
+  renderEditor();
+}
+
+function filterTree() {
+  applyTreeFilter();
+}
+
+function applyTreeFilter() {
+  var q = ($('tree-search').value || '').toLowerCase().trim();
+  var allLis = document.querySelectorAll('#tree-root li');
+  allLis.forEach(function(li) {
+    var labelEl = li.querySelector('.tree-label');
+    var label = (labelEl ? (labelEl.getAttribute('title') || labelEl.textContent) : '').toLowerCase();
+    var display = 'block';
+    if (q && label.indexOf(q) < 0) {
+      var hasVisibleChild = li.querySelector('li:not([style*="display: none"])');
+      display = hasVisibleChild ? 'block' : 'none';
+    }
+    li.style.display = display;
+  });
+  // second pass: hide parents whose all children are hidden
+  if (q) {
+    allLis.forEach(function(li) {
+      var labelEl = li.querySelector('.tree-label');
+      var label = (labelEl ? (labelEl.getAttribute('title') || labelEl.textContent) : '').toLowerCase();
+      if (label.indexOf(q) < 0) {
+        var vis = li.querySelector('li:not([style*="display: none"])');
+        if (!vis) li.style.display = 'none';
+      }
+    });
+  }
 }
 
 function buildTreeItem(cat, index, parentRef, depth) {
@@ -189,35 +241,47 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var hasItems = cat.items && cat.items.length > 0;
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
-  var icon = hasChildren ? '\u{1F4C1}' : '\u{1F4C4}';
-  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
+  var icon = '\u{1F4C1}';
+  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
   if (state.selectedNode === cat) li.classList.add('active');
 
+  var ul = null;
   if (hasChildren) {
-    var ul = document.createElement('ul');
+    ul = document.createElement('ul');
     cat.children.forEach(function(child, ci) { ul.appendChild(buildTreeItem(child, ci, cat, depth + 1)); });
-    li.appendChild(ul);
   }
+  if (hasItems) {
+    if (!ul) ul = document.createElement('ul');
+    cat.items.forEach(function(it, ii) {
+      var itemLi = document.createElement('li');
+      itemLi.style.paddingLeft = ((depth + 1) * 14) + 'px';
+      var itType = it.type || 'ITEM';
+      var itIcon = itType === 'PLACEHOLDER' ? '\u{1F3F7}' : (it.icon ? '\u{1F5BC}' : '\u{1F4E6}');
+      var itLabel = it.display || it.id || it.key || '?';
+      if (itType === 'PLACEHOLDER') itLabel = it.display || '(占位)';
+      itemLi.innerHTML = '<span class="tree-icon" style="opacity:0.7">' + itIcon + '</span><span class="tree-label tree-item" title="' + MC.strip(itLabel) + '">' + MC.parseToHtml(itLabel) + '</span>';
+      itemLi.onclick = function(e) { e.stopPropagation(); selectGridItem(it, ii); };
+      if (state.selectedNode === it) itemLi.classList.add('active');
+      ul.appendChild(itemLi);
+    });
+  }
+  if (ul) li.appendChild(ul);
   return li;
 }
 
 function selectCategory(cat, index, parentRef) {
   state.selectedNode = cat;
-  if (parentRef) {
-    state.selectedCategory = parentRef;
-    state.currentPage = cat.page || 1;
-  } else {
-    state.selectedCategory = cat;
-    state.currentPage = 1;
-  }
+  state.selectedCategory = cat;
+  state.currentPage = 1;
   renderTree();
   renderGrid();
   renderEditor();
 }
 
 function getChildren() {
+  if (state.selectedCategory === null) return state.categories || [];
   if (!state.selectedCategory) return [];
   var list = [];
   if (state.selectedCategory.children) list = list.concat(state.selectedCategory.children);
@@ -238,13 +302,15 @@ function getMaxPage() {
 function renderGrid() {
   var grid = $('grid');
   grid.innerHTML = '';
-  if (!state.selectedCategory) {
+  if (!state.selectedCategory && state.selectedCategory !== null) {
     $('grid-title').textContent = '请选择左侧分类';
     $('grid-page-controls').style.display = 'none';
     $('grid-empty').style.display = 'none';
     return;
   }
-  $('grid-title').innerHTML = MC.parseToHtml(state.selectedCategory.display || state.selectedCategory.key || '未命名分类');
+  var isRoot = state.selectedCategory === null;
+  $('grid-title').textContent = isRoot ? '根级别' : '';
+  if (!isRoot) $('grid-title').innerHTML = MC.parseToHtml(state.selectedCategory.display || state.selectedCategory.key || '未命名分类');
   $('grid-page-controls').style.display = 'flex';
 
   var maxPage = getMaxPage();
@@ -268,7 +334,7 @@ function renderGrid() {
     if (item) {
       var typeLabel = '', typeClass = '';
       if (item.type === 'PLACEHOLDER') { typeLabel = '占位'; typeClass = 'placeholder'; cell.setAttribute('data-placeholder',''); }
-      else if (item.icon || item.type === 'CATEGORY') { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); }
+      else if (item.icon || item.type === 'CATEGORY' || item.key) { typeLabel = '分类'; typeClass = 'category'; cell.setAttribute('data-category',''); }
       else { typeLabel = '物品'; typeClass = 'item'; }
 
       var displayName = item.display || item.id || item.key || '?';
@@ -278,7 +344,8 @@ function renderGrid() {
 
       cell.onclick = (function(it, iIndex) { return function(e) {
         e.stopPropagation();
-        selectGridItem(it, iIndex);
+        if (isRoot && it.key) { selectCategory(it, iIndex, null); }
+        else selectGridItem(it, iIndex);
       }; })(item, idx);
 
       cell.oncontextmenu = (function(it) { return function(e) {
@@ -335,20 +402,19 @@ function selectGridItem(item, idx) {
 
 function renderEditor() {
   var node = state.selectedNode;
-  if (!node) { $('editor-form').style.display = 'none'; $('editor-empty').style.display = 'block'; return; }
+  if (!node || state.selectedCategory === null) { $('editor-form').style.display = 'none'; $('editor-empty').style.display = 'block'; return; }
   $('editor-form').style.display = 'block';
   $('editor-empty').style.display = 'none';
 
   var isItem = node.type === 'ITEM';
-  var isRoot = isRootCategory(node);
 
   $('edit-display').value = node.display || '';
-  $('edit-display').disabled = isItem || isRoot;
+  $('edit-display').disabled = isItem;
   $('edit-lore').value = (node.lore || []).join('\n');
-  $('edit-lore').disabled = isItem || isRoot;
+  $('edit-lore').disabled = isItem;
   $('edit-glow').checked = !!node.glow;
-  $('edit-glow').disabled = isItem || isRoot;
-  $('btn-pick-icon').style.display = (isItem || isRoot) ? 'none' : '';
+  $('edit-glow').disabled = isItem;
+  $('btn-pick-icon').style.display = isItem ? 'none' : '';
   $('edit-page').value = node.page || 1;
 
   updateDisplayPreview();
@@ -379,10 +445,9 @@ function updateSelection() {
   var node = state.selectedNode;
   if (!node) return;
   var isItem = node.type === 'ITEM';
-  var isRoot = isRootCategory(node);
-  if (!isItem && !isRoot) node.display = $('edit-display').value;
-  if (!isItem && !isRoot) node.lore = $('edit-lore').value.split('\n');
-  if (!isItem && !isRoot) node.glow = $('edit-glow').checked;
+  if (!isItem) node.display = $('edit-display').value;
+  if (!isItem) node.lore = $('edit-lore').value.split('\n');
+  if (!isItem) node.glow = $('edit-glow').checked;
   node.page = parseInt($('edit-page').value) || 1;
   state.currentPage = node.page;
   updateDisplayPreview();
@@ -395,130 +460,24 @@ function updateSelection() {
 document.getElementById('edit-display').addEventListener('input', updateDisplayPreview);
 document.getElementById('edit-lore').addEventListener('input', updateLorePreview);
 
-var ColorPicker = {
-  colors: [
-    {code:'0',hex:'#000000',name:'Black'},
-    {code:'1',hex:'#0000AA',name:'Dark Blue'},
-    {code:'2',hex:'#00AA00',name:'Dark Green'},
-    {code:'3',hex:'#00AAAA',name:'Dark Aqua'},
-    {code:'4',hex:'#AA0000',name:'Dark Red'},
-    {code:'5',hex:'#AA00AA',name:'Dark Purple'},
-    {code:'6',hex:'#FFAA00',name:'Gold'},
-    {code:'7',hex:'#AAAAAA',name:'Gray'},
-    {code:'8',hex:'#555555',name:'Dark Gray'},
-    {code:'9',hex:'#5555FF',name:'Blue'},
-    {code:'a',hex:'#55FF55',name:'Green'},
-    {code:'b',hex:'#55FFFF',name:'Aqua'},
-    {code:'c',hex:'#FF5555',name:'Red'},
-    {code:'d',hex:'#FF55FF',name:'Light Purple'},
-    {code:'e',hex:'#FFFF55',name:'Yellow'},
-    {code:'f',hex:'#FFFFFF',name:'White'}
-  ],
-  formats: [
-    {code:'l',label:'&l 粗体'},
-    {code:'m',label:'&m 删除线'},
-    {code:'n',label:'&n 下划线'},
-    {code:'o',label:'&o 斜体'},
-    {code:'k',label:'&k 闪烁'},
-    {code:'r',label:'&r 重置'}
-  ],
-  _target: null,
-  init: function() {
-    var grid = document.getElementById('color-picker-grid');
-    grid.innerHTML = '';
-    var self = this;
-    this.colors.forEach(function(c) {
-      var chip = document.createElement('div');
-      chip.className = 'color-chip ' + (parseInt(c.code,16) >= 8 ? 'color-chip-dark' : 'color-chip-light');
-      chip.style.background = c.hex;
-      chip.textContent = '&' + c.code;
-      chip.title = c.name;
-      chip.onmousedown = function(e) { e.preventDefault(); self.pick('&' + c.code); };
-      grid.appendChild(chip);
-    });
-    var formats = document.getElementById('color-picker-formats');
-    formats.innerHTML = '';
-    this.formats.forEach(function(f) {
-      var chip = document.createElement('span');
-      chip.className = 'format-chip';
-      chip.textContent = f.label;
-      chip.title = '插入 ' + f.code;
-      chip.onmousedown = function(e) { e.preventDefault(); self.pick('&' + f.code); };
-      formats.appendChild(chip);
-    });
-    var tip = document.createElement('div');
-    tip.className = 'color-picker-tip';
-    tip.textContent = '点击插入 ESC关闭';
-    formats.appendChild(tip);
-  },
-  show: function(input) {
-    this._target = input;
-    var picker = document.getElementById('color-picker');
-    if (!picker.hasChildNodes() || picker.children.length === 0) { this.init(); }
-    var rect = input.getBoundingClientRect();
-    picker.style.left = rect.left + 'px';
-    picker.style.top = (rect.bottom + 4) + 'px';
-    picker.style.display = 'block';
-    var self = this;
-    setTimeout(function() {
-      document.addEventListener('mousedown', self._hideHandler = function(e) {
-        if (!picker.contains(e.target)) { self.hide(); }
-      });
-    }, 0);
-  },
-  hide: function() {
-    document.getElementById('color-picker').style.display = 'none';
-    this._target = null;
-    if (this._hideHandler) { document.removeEventListener('mousedown', this._hideHandler); this._hideHandler = null; }
-  },
-  pick: function(code) {
-    var input = this._target;
-    if (!input) return;
-    var pos = this._getCursorPos(input);
-    var before = input.value.substring(0, pos);
-    var after = input.value.substring(pos);
-    var ampIdx = before.lastIndexOf('&');
-    if (ampIdx < 0) { input.value = before + code + after; }
-    else { input.value = before.substring(0, ampIdx) + code + after; }
-    this.hide();
-    input.focus();
-    this._setCursorPos(input, ampIdx >= 0 ? ampIdx + code.length : before.length + code.length);
-    input.dispatchEvent(new Event('input', {bubbles:true}));
-    input.dispatchEvent(new Event('change', {bubbles:true}));
-    markDirty();
-  },
-  _getCursorPos: function(input) {
-    if (input.selectionStart !== undefined) return input.selectionStart;
-    return input.value.length;
-  },
-  _setCursorPos: function(input, pos) {
-    if (input.setSelectionRange) input.setSelectionRange(pos, pos);
-  }
-};
-
-(function() {
-  function onInputKey(e) {
-    if (e.key === '&') {
-      ColorPicker.show(e.target);
-    }
-    if (e.key === 'Escape') {
-      ColorPicker.hide();
-    }
-  }
-  document.getElementById('edit-display').addEventListener('keydown', onInputKey);
-  document.getElementById('edit-lore').addEventListener('keydown', onInputKey);
-})();
-
 function deleteSelected() {
   if (!state.selectedNode || !state.selectedCategory) return;
   Dialog.confirm('确定要删除此项吗？此操作无法撤销。', function(ok) {
     if (!ok) return;
-    if (state.selectedNode.type === 'CATEGORY') {
-      state.selectedCategory.children = (state.selectedCategory.children || []).filter(function(c) { return c !== state.selectedNode; });
+    var parent = findParent(state.selectedNode);
+    if (state.selectedNode.key) {
+      if (parent && parent.children) {
+        parent.children = parent.children.filter(function(c) { return c !== state.selectedNode; });
+      } else {
+        state.categories = state.categories.filter(function(c) { return c !== state.selectedNode; });
+      }
     } else {
-      state.selectedCategory.items = (state.selectedCategory.items || []).filter(function(it) { return it !== state.selectedNode; });
+      if (parent && parent.items) {
+        parent.items = parent.items.filter(function(it) { return it !== state.selectedNode; });
+      }
     }
     state.selectedNode = null;
+    state.selectedCategory = parent || null;
     markDirty();
     renderGrid();
     renderTree();
@@ -527,13 +486,61 @@ function deleteSelected() {
   });
 }
 
+function findParent(node) {
+  function search(cats, parent) {
+    for (var i = 0; i < cats.length; i++) {
+      var cat = cats[i];
+      if (cat === node) return parent;
+      if (cat.children) {
+        var found = search(cat.children, cat);
+        if (found) return found;
+      }
+      if (cat.items) {
+        for (var j = 0; j < cat.items.length; j++) {
+          if (cat.items[j] === node) return cat;
+        }
+      }
+    }
+    return null;
+  }
+  return search(state.categories, null);
+}
+
+function collectSiblingKeys() {
+  var keys = new Set();
+  var siblings;
+  if (state.selectedCategory === null) { siblings = state.categories; }
+  else if (state.selectedCategory) { siblings = state.selectedCategory.children || []; }
+  else { return keys; }
+  siblings.forEach(function(c) { if (c.key) keys.add(c.key); });
+  return keys;
+}
+
+function makeUniqueKey(baseKey) {
+  var existing = collectSiblingKeys();
+  if (!existing.has(baseKey)) return baseKey;
+  var n = 2;
+  while (existing.has(baseKey + '_' + n)) n++;
+  return baseKey + '_' + n;
+}
+
 function addCategory() {
-  if (!state.selectedCategory) { Toast.show('请先选择左侧分类', 'warning'); return; }
   Dialog.prompt('输入分类 key（英文 ID）', 'new_category', function(key) {
     if (!key) return;
+    var existing = collectSiblingKeys();
+    if (existing.has(key)) {
+      var suggested = makeUniqueKey(key);
+      Toast.show('key "' + key + '" 已存在，自动更名为 "' + suggested + '"', 'warning');
+      key = suggested;
+    }
     var newCat = { key: key, display: key, icon: { type: 'VANILLA', id: 'BOOK' }, glow: false, lore: [], page: 1, slot: findEmptySlot(), children: [], items: [] };
-    if (!state.selectedCategory.children) state.selectedCategory.children = [];
-    state.selectedCategory.children.push(newCat);
+    if (state.selectedCategory) {
+      if (!state.selectedCategory.children) state.selectedCategory.children = [];
+      state.selectedCategory.children.push(newCat);
+    } else {
+      state.categories.push(newCat);
+      state.selectedCategory = newCat;
+    }
     markDirty();
     renderTree();
     state.selectedNode = newCat;
@@ -544,7 +551,8 @@ function addCategory() {
 }
 
 function addPlaceholder() {
-  if (!state.selectedCategory) { Toast.show('请先选择左侧分类', 'warning'); return; }
+  if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
+  if (state.selectedCategory === null) { Toast.show('根级别不能添加占位物品，请选择子分类', 'warning'); return; }
   var newPh = { type: 'PLACEHOLDER', display: '', icon: { type: 'VANILLA', id: 'GRAY_STAINED_GLASS_PANE' }, glow: false, lore: [], page: 1, slot: findEmptySlot() };
   if (!state.selectedCategory.items) state.selectedCategory.items = [];
   state.selectedCategory.items.push(newPh);
@@ -555,14 +563,18 @@ function addPlaceholder() {
 }
 
 function addItem() {
-  if (!state.selectedCategory) { Toast.show('请先选择左侧分类', 'warning'); return; }
+  if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
+  if (state.selectedCategory === null) { Toast.show('根级别不能添加物品，请选择子分类', 'warning'); return; }
   state.pickerTarget = 'addItem';
+  state.pickerFilter = 'all';
   $('picker-title').textContent = '添加物品';
+  $('picker-filters').style.display = 'flex';
   $('picker-overlay').style.display = 'flex';
   var input = $('picker-search');
   input.value = '';
   input.placeholder = '搜索物品名或ID...';
   $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>';
+  updatePickerFilterBtns();
   setTimeout(function() { input.focus(); }, 100);
 }
 
@@ -579,7 +591,46 @@ function openIconPicker() {
 
 function closePicker() {
   $('picker-overlay').style.display = 'none';
+  $('picker-filters').style.display = 'none';
   state.pickerTarget = null;
+}
+
+function collectUsedSlimefunIds() {
+  var ids = new Set();
+  function walk(cats) {
+    if (!cats) return;
+    cats.forEach(function(cat) {
+      if (cat.items) {
+        cat.items.forEach(function(it) {
+          if (it.type === 'ITEM' && it.id) ids.add(it.id);
+        });
+      }
+      if (cat.children) walk(cat.children);
+    });
+  }
+  walk(state.categories);
+  return ids;
+}
+
+function collectCategoryItemIds(cat) {
+  var ids = new Set();
+  if (!cat || !cat.items) return ids;
+  cat.items.forEach(function(it) { if (it.type === 'ITEM' && it.id) ids.add(it.id); });
+  return ids;
+}
+
+function setPickerFilter(filter) {
+  state.pickerFilter = filter;
+  updatePickerFilterBtns();
+  doSearch();
+}
+
+function updatePickerFilterBtns() {
+  var btns = document.querySelectorAll('#picker-filters .picker-filter-btn');
+  btns.forEach(function(btn) {
+    var isActive = btn.getAttribute('data-filter') === state.pickerFilter;
+    btn.className = 'picker-filter-btn' + (isActive ? ' active' : '');
+  });
 }
 
 function findEmptySlot() {
@@ -633,11 +684,22 @@ async function doSearch() {
   if (!q) { $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>'; return; }
   $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">搜索中...</div>';
   try {
-    var resp = await fetch('/api/materials?q=' + encodeURIComponent(q));
+    var url = '/api/materials?q=' + encodeURIComponent(q);
+    if (state.pickerTarget === 'addItem') url += '&type=SLIMEFUN';
+    var resp = await fetch(url);
     var data = await resp.json();
+    var results = data.results || [];
+    if (state.pickerTarget === 'addItem' && state.pickerFilter !== 'all') {
+      var usedIds = collectUsedSlimefunIds();
+      if (state.pickerFilter === 'added') {
+        results = results.filter(function(r) { return usedIds.has(r.id); });
+      } else if (state.pickerFilter === 'not_added') {
+        results = results.filter(function(r) { return !usedIds.has(r.id); });
+      }
+    }
     var html = '';
-    if (data.results && data.results.length > 0) {
-      data.results.forEach(function(r) {
+    if (results.length > 0) {
+      results.forEach(function(r) {
         var typeClass = r.type === 'VANILLA' ? 'vanilla' : (r.type === 'HEAD' ? 'head' : 'slimefun');
         var safeId = (r.id || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         html += '<div class="picker-item" onclick="pickMaterial(\'' + r.type + '\',\'' + safeId + '\')">' +
@@ -666,6 +728,12 @@ function pickMaterial(type, id) {
     }
   } else if (state.pickerTarget === 'addItem') {
     if (state.selectedCategory) {
+      var catItemIds = collectCategoryItemIds(state.selectedCategory);
+      if (catItemIds.has(id)) {
+        Toast.show('物品 "' + id + '" 已存在于当前分类，不可重复添加', 'warning');
+        closePicker();
+        return;
+      }
       var newItem = { type: 'ITEM', id: id, display: id, page: state.currentPage, slot: findEmptySlot() };
       if (!state.selectedCategory.items) state.selectedCategory.items = [];
       state.selectedCategory.items.push(newItem);
@@ -714,6 +782,13 @@ document.addEventListener('keydown', function(e) {
 
 window.addEventListener('beforeunload', function(e) {
   if (state.dirty) { e.preventDefault(); e.returnValue = '你有未保存的更改'; return e.returnValue; }
+});
+
+document.getElementById('picker-filters').addEventListener('click', function(e) {
+  var btn = e.target.closest('.picker-filter-btn');
+  if (!btn) return;
+  var filter = btn.getAttribute('data-filter');
+  if (filter) setPickerFilter(filter);
 });
 
 loadCategories();

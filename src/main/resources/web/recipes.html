@@ -1,0 +1,345 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright (C) 2025 happy (k666kkk666k@163.com)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>合成表编辑器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',sans-serif;font-size:12px;overflow:hidden;display:flex;flex-direction:column;height:100vh}
+.toolbar{display:flex;align-items:center;gap:12px;padding:8px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0}
+.toolbar .tt{color:#c9d1d9;font-weight:700;font-size:13px}
+.btn{padding:5px 12px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;border-radius:4px;cursor:pointer;font-size:11px;transition:all 0.15s}
+.btn:hover{background:#30363d}
+.btn-primary{background:#e94560;color:#fff;border-color:#e94560}
+.btn-primary:hover{background:#c73750}
+.btn-sm{padding:3px 8px;font-size:10px}
+.main{display:flex;flex:1;overflow:hidden}
+.panel{background:#161b22;border-right:1px solid #30363d;overflow-y:auto}
+.left{flex:0 0 240px;display:flex;flex-direction:column}
+.center{flex:1;display:flex;align-items:center;justify-content:center}
+.right{flex:0 0 260px;padding:12px}
+.search-box{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:6px 8px;font-size:11px;width:100%;margin:8px;width:calc(100% - 16px)}
+.search-box:focus{outline:none;border-color:#e94560}
+.item-row{padding:6px 10px;border-left:3px solid transparent;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:0.15s;color:#b1bac4;font-size:11px}
+.item-row:hover{background:#1a1f2b;color:#c9d1d9}
+.item-row.active{border-left-color:#e94560;background:#1a1f2b;color:#e94560}
+.item-row .rtag{font-size:9px;color:#484f58}
+.grid-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.grid-label{color:#c9d1d9;font-weight:700;font-size:13px}
+.grid-sub{color:#b1bac4;font-size:10px}
+.recipe-grid{display:grid;gap:6px;padding:14px;background:#0d1117;border-radius:8px;border:2px solid #30363d}
+.slot{width:56px;height:56px;background:#21262d;border:2px dashed #30363d;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;position:relative;font-size:11px}
+.slot:hover{border-color:#e94560;background:#2a1f2e}
+.slot.filled{border-style:solid;border-color:#30363d;background:#1a2230;color:#c9d1d9}
+.slot .qt{position:absolute;bottom:2px;right:4px;font-size:9px;color:#8b949e}
+.oslot{width:56px;height:56px;background:#1a2f1a;border:2px solid #2ea043;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#3fb950;font-size:20px}
+.slabel{font-size:10px;color:#e6edf3;font-weight:500;margin-bottom:2px}
+.type-list{background:#0d1117;border:1px solid #30363d;border-radius:4px;max-height:200px;overflow-y:auto}
+.typeopt{padding:4px 8px;cursor:pointer;border-radius:3px;font-size:11px;color:#c9d1d9}
+.typeopt:hover{background:#1a1f2b;color:#e6edf3}
+.typeopt.active{background:#e9456022;color:#e94560}
+.typeopt .tns{color:#b1bac4;font-size:10px}
+.toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:6px;font-size:12px;z-index:200;display:none;animation:toastIn 0.3s}
+.toast-success{background:#238636;border:1px solid #2ea043}
+.toast-error{background:#da3633;border:1px solid #f85149}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99}
+.overlay.show{display:block}
+.popup{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:380px;max-height:480px;background:#161b22;border:1px solid #30363d;border-radius:8px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.6);flex-direction:column}
+.popup.show{display:flex}
+.popup-hdr{padding:10px;border-bottom:1px solid #30363d}
+.popup-body{overflow-y:auto;max-height:360px;padding:6px}
+.popup-item{padding:6px 8px;cursor:pointer;border-radius:4px;color:#c9d1d9;font-size:11px;display:flex;justify-content:space-between}
+.popup-item:hover{background:#1a1f2b}
+.popup-item .pid{color:#8b949e;font-size:10px}
+.out-item{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#3fb950;font-size:11px;cursor:pointer}
+.out-item span{color:#b1bac4;font-size:10px}
+.yaml-preview{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:8px;font-size:10px;max-height:120px;overflow-y:auto;white-space:pre;font-family:Consolas,monospace;color:#7ee787}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+</style></head><body>
+<div class="toolbar">
+  <span class="tt">🔧 合成表编辑器</span>
+  <span id="save-badge" style="font-size:10px;background:#1a2f1a;color:#3fb950;padding:2px 8px;border-radius:8px;">已保存</span>
+  <span style="flex:1"></span>
+  <span style="color:#8b949e;font-size:10px;">ctrl+S 保存</span>
+  <button class="btn btn-primary btn-sm" onclick="save()">💾 保存</button>
+</div>
+<div class="main">
+  <div class="panel left">
+    <input class="search-box" placeholder="🔍 搜索ID/名称..." oninput="filterItems(this.value)" id="item-search">
+    <div id="item-list" style="flex:1;overflow-y:auto;"></div>
+  </div>
+  <div class="center" id="center-panel">
+    <div style="text-align:center;color:#484f58;" id="center-empty">请选择左侧物品</div>
+  </div>
+  <div class="panel right" id="right-panel" style="display:none;">
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px;">✏ 配方属性</div>
+    <div class="slabel">合成方式</div>
+    <div class="type-list" id="type-list" style="margin-bottom:12px;"></div>
+    <div class="slabel">输出物品</div>
+    <div class="out-item" onclick="openPicker('output')" id="output-display" style="margin-bottom:8px;"></div>
+    <div class="slabel">输出数量</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;">
+      <button class="btn btn-sm" onclick="changeAmount(-1)">−</button>
+      <span id="amount-display" style="font-size:15px;min-width:24px;text-align:center;">1</span>
+      <button class="btn btn-sm" onclick="changeAmount(1)">+</button>
+    </div>
+    <div class="slabel">Recipes.yml 预览</div>
+    <div class="yaml-preview" id="yaml-preview"></div>
+    <div style="margin-top:12px;display:flex;gap:6px;">
+      <button class="btn" style="flex:1" onclick="discard()">↶ 放弃</button>
+      <button class="btn btn-primary" style="flex:1" onclick="save()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closePicker()"></div>
+<div class="popup" id="popup">
+  <div class="popup-hdr">
+    <input class="search-box" placeholder="搜索物品..." oninput="filterPopup(this.value)" id="popup-search" style="margin:0;width:100%;">
+    <div style="font-size:9px;color:#484f58;margin-top:4px;">数据来源: Slimefun 运行时 API</div>
+  </div>
+  <div class="popup-body" id="popup-body"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var API_TOKEN = sessionStorage.getItem('scg_token') || '';
+if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
+var nativeFetch = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  init = init || {};
+  init.headers = init.headers || {};
+  if (API_TOKEN) {
+    init.headers['X-SlimefunCustomGuide-Token'] = API_TOKEN;
+  }
+  return nativeFetch(input, init);
+};
+var itemData = {}, recipeTypes = [], allItems = [], selectedItemId = null;
+var currentTypeKey = '', slots = [], outputItemId = '', outputItemName = '', amount = 1;
+var pickerTarget = 'slot', pickerSlotIdx = -1;
+
+function $id(id) { return document.getElementById(id); }
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function escKey(k) { return k.replace(/\\/g,'\\\\').replace(/'/g,'\\\''); }
+
+function loadAll() {
+  fetch('/api/recipes').then(function(r){return r.json()}).then(function(json){
+    itemData = json.items || {};
+    recipeTypes = json.recipeTypes || [];
+    allItems = [];
+    Object.keys(itemData).forEach(function(k){
+      allItems.push({id:k, name:itemData[k].name||k, rt:itemData[k].currentRecipeType||''});
+    });
+    allItems.sort(function(a,b){return a.name.localeCompare(b.name)});
+    renderItemList('');
+  }).catch(function(e){ showToast('加载失败: '+e.message,'error') });
+}
+
+function renderItemList(filter) {
+  var q = (filter||'').toLowerCase(), h = '';
+  allItems.forEach(function(it){
+    if (q && it.id.toLowerCase().indexOf(q)<0 && it.name.toLowerCase().indexOf(q)<0) return;
+    var rtShort = it.rt ? it.rt.split(':').pop() : '';
+    h+='<div class="item-row'+(selectedItemId===it.id?' active':'')+'" data-id="'+it.id+'" onclick="selectItem(\''+escKey(it.id)+'\')">'
+      +'<span>'+esc(it.name)+'</span><span class="rtag">'+rtShort+'</span></div>';
+  });
+  $id('item-list').innerHTML = h || '<div style="padding:12px;color:#484f58;text-align:center;">无匹配</div>';
+}
+
+function filterItems(v) { renderItemList(v); }
+
+function selectItem(id) {
+  selectedItemId = id;
+  var d = itemData[id];
+  if (!d) return;
+  renderItemList($id('item-search').value);
+
+  var recipes = d.recipes || [];
+  if (recipes.length > 0) {
+    var r = recipes[0];
+    currentTypeKey = r.type || d.currentRecipeType || '';
+    slots = (r.input||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+    outputItemId = r.output || d.id;
+    outputItemName = resolveName(outputItemId);
+    amount = r.outputAmount || 1;
+  } else {
+    currentTypeKey = d.currentRecipeType || '';
+    slots = (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+    outputItemId = d.id;
+    outputItemName = d.name;
+    amount = 1;
+  }
+  if (slots.length === 0) slots = [null];
+
+  $id('right-panel').style.display = 'block';
+  $id('center-empty').style.display = 'none';
+  renderTypeList();
+  renderGrid();
+  updateYaml();
+}
+
+function resolveName(id) {
+  if (itemData[id]) return itemData[id].name||id;
+  return id;
+}
+
+function renderGrid() {
+  var info = getTypeInfo(currentTypeKey);
+  var cols = info.cols, total = info.slots;
+  while (slots.length < total) slots.push(null);
+  while (slots.length > total) { var d = slots.pop(); }
+
+  var h = '';
+  h += '<div class="grid-label">' + esc(info.name) + '</div>';
+  h += '<div class="grid-sub">' + currentTypeKey + ' · 输入 ' + total + ' 格 · 输出 1 格</div>';
+  h += '<div class="recipe-grid" style="grid-template-columns:repeat('+cols+', 56px);">';
+  for (var i = 0; i < total; i++) {
+    var s = slots[i];
+    var cl = s && s.id !== 'AIR' ? 'slot filled' : 'slot';
+    var inner = s && s.id !== 'AIR' ? esc(s.name) : '<span style="font-size:18px;color:#484f58;">?</span>';
+    h += '<div class="'+cl+'" onclick="openSlotPicker('+i+')">'+inner+'</div>';
+  }
+  h += '<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:18px;height:16px;">↓</div>';
+  h += '<div class="oslot" style="grid-column:1/-1;justify-self:center;">📦<span style="font-size:10px;color:#8b949e;">×'+amount+'</span></div>';
+  h += '</div>';
+  $id('center-panel').innerHTML = h;
+
+  var out = $id('output-display');
+  out.innerHTML = esc(outputItemName) + ' <span>('+esc(outputItemId)+')</span>';
+  $id('amount-display').textContent = amount;
+}
+
+function getTypeInfo(key) {
+  var found = recipeTypes.find(function(t){return t.key===key;});
+  var name = found ? found.name : key;
+  var slots = found ? found.slots : 1;
+  var cols = slots === 9 ? 3 : slots === 2 ? 2 : 1;
+  return {name:name, slots:slots, cols:cols};
+}
+
+function renderTypeList() {
+  var h = '';
+  recipeTypes.forEach(function(t){
+    h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" onclick="changeType(\''+escKey(t.key)+'\')">'
+      + esc(t.name) + ' <span class="tns">'+esc(t.key)+'</span></div>';
+  });
+  $id('type-list').innerHTML = h;
+}
+
+function changeType(key) {
+  currentTypeKey = key;
+  var info = getTypeInfo(key);
+  while (slots.length < info.slots) slots.push(null);
+  while (slots.length > info.slots) slots.pop();
+  renderTypeList();
+  renderGrid();
+  updateYaml();
+}
+
+function openSlotPicker(idx) {
+  pickerTarget = 'slot'; pickerSlotIdx = idx;
+  $id('overlay').classList.add('show'); $id('popup').classList.add('show');
+  $id('popup-search').value = ''; renderPopup('');
+}
+
+function openPicker(target) {
+  pickerTarget = target; pickerSlotIdx = -1;
+  $id('overlay').classList.add('show'); $id('popup').classList.add('show');
+  $id('popup-search').value = ''; renderPopup('');
+}
+
+function renderPopup(filter) {
+  var body = $id('popup-body'), q = (filter||'').toLowerCase();
+  var list = allItems.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0||it.id.toLowerCase().indexOf(q)>=0;});
+  var h = '';
+  list.forEach(function(it){
+    h += '<div class="popup-item" onclick="pickItem(\''+escKey(it.id)+'\',\''+escKey(it.name)+'\')"><span>'+esc(it.name)+'</span><span class="pid">'+esc(it.id)+'</span></div>';
+  });
+  body.innerHTML = h || '<div style="color:#8b949e;text-align:center;padding:16px;">无匹配</div>';
+}
+
+function pickItem(id, name) {
+  if (pickerTarget === 'output') {
+    outputItemId = id; outputItemName = name;
+  } else if (pickerTarget === 'slot' && pickerSlotIdx >= 0) {
+    slots[pickerSlotIdx] = {id:id, name:name};
+  }
+  closePicker();
+  renderGrid();
+  updateYaml();
+}
+
+function closePicker() {
+  $id('overlay').classList.remove('show'); $id('popup').classList.remove('show');
+}
+
+function filterPopup(v) { renderPopup(v); }
+
+function changeAmount(d) {
+  amount = Math.max(1, Math.min(64, amount + d));
+  $id('amount-display').textContent = amount;
+  updateYaml();
+}
+
+function updateYaml() {
+  var info = getTypeInfo(currentTypeKey);
+  var inputList = slots.map(function(s){return s&&s.id!=='AIR'?s.id:'AIR';});
+  var y = '<span style="color:#ff7b72;">slimefun:</span>\n  <span style="color:#ff7b72;">'+esc(outputItemId)+':</span>\n    <span style="color:#ff7b72;">recipes:</span>\n      - <span style="color:#ff7b72;">type:</span> <span style="color:#a5d6ff;">'+esc(currentTypeKey)+'</span>\n        <span style="color:#ff7b72;">input:</span> <span style="color:#a5d6ff;">['+inputList.map(function(x){return '\''+esc(x)+'\''}).join(', ')+']</span>\n        <span style="color:#ff7b72;">output:</span> <span style="color:#a5d6ff;">'+esc(outputItemId)+'</span>\n        <span style="color:#ff7b72;">output-amount:</span> <span style="color:#79c0ff;">'+amount+'</span>';
+  $id('yaml-preview').innerHTML = y;
+}
+
+function discard() {
+  if (selectedItemId) selectItem(selectedItemId);
+  else showToast('请先选择物品','info');
+}
+
+function save() {
+  if (!selectedItemId) { showToast('请先选择物品','error'); return; }
+  var bag = $id('save-badge');
+  bag.textContent = '保存中...'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
+
+  var inputIds = slots.map(function(s){return s && s.id !== 'AIR' ? s.id : 'AIR';});
+  var payload = {items:{}};
+  payload.items[selectedItemId] = {recipes:[{type:currentTypeKey, input:inputIds, output:outputItemId, outputAmount:amount}]};
+
+  fetch('/api/recipes', {method:'PUT', body:JSON.stringify(payload)}).then(function(r){
+    if (!r.ok) throw new Error('HTTP '+r.status); return r.json();
+  }).then(function(){
+    bag.textContent = '已保存 · 实时生效'; bag.style.background='#1a2f1a'; bag.style.color='#3fb950';
+    showToast('合成表已更新 · 实时生效','success');
+  }).catch(function(e){
+    bag.textContent = '已保存'; bag.style.background='#1a2f1a'; bag.style.color='#3fb950';
+    showToast('保存失败: '+e.message,'error');
+  });
+}
+
+function showToast(msg, type) {
+  var t = $id('toast'); t.textContent = msg; t.className = 'toast toast-'+(type||'info');
+  t.style.display = 'block'; setTimeout(function(){t.style.display='none';},2500);
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closePicker();
+  if ((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();save();}
+});
+
+loadAll();
+</script></body></html>

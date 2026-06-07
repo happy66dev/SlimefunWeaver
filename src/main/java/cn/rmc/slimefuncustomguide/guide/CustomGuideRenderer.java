@@ -16,6 +16,7 @@
 package cn.rmc.slimefuncustomguide.guide;
 
 import cn.rmc.slimefuncustomguide.CustomGuidePlugin;
+import cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI;
 import cn.rmc.slimefuncustomguide.config.PlaceholderResolver;
 import cn.rmc.slimefuncustomguide.model.CustomCategory;
 import cn.rmc.slimefuncustomguide.model.CustomItemEntry;
@@ -25,12 +26,14 @@ import cn.rmc.slimefuncustomguide.model.IconSource;
 import cn.rmc.slimefuncustomguide.model.IconType;
 import cn.rmc.slimefuncustomguide.model.TreeNodeType;
 import cn.rmc.slimefuncustomguide.util.IconParser;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.chat.ChatInput;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuide;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
+import io.github.thebusybiscuit.slimefun4.core.multiblocks.MultiBlockMachine;
 import io.github.thebusybiscuit.slimefun4.core.services.sounds.SoundEffect;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
@@ -39,6 +42,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,19 +65,30 @@ public class CustomGuideRenderer {
 
     public void openMainMenu(Player player, CustomGuideHistory history,
                              SlimefunGuideMode mode, int page) {
+        CustomGuidePlugin.debug(player, "openMainMenu: page=" + page + " mode=" + mode);
         CustomCategory dummyRoot = new CustomCategory(ROOT_KEY, "Root",
                 new IconSource(IconType.VANILLA, "BOOK"), null, 1, 0, false);
         for (CustomCategory cat : plugin.getRootCategories()) {
             dummyRoot.addChild(cat);
         }
+        history.setCurrentCategory(dummyRoot);
+        history.setCurrentPage(page);
         openMenu(player, history, mode, dummyRoot, page);
     }
 
     public void openMenu(Player player, CustomGuideHistory history,
                           SlimefunGuideMode mode, CustomCategory category, int page) {
+        if (category == null) {
+            CustomGuidePlugin.debug(player, "openMenu: category is null, opening main menu");
+            openMainMenu(player, history, mode, 1);
+            return;
+        }
+        CustomGuidePlugin.debug(player, "openMenu: cat=" + category.getKey() + " page=" + page +
+                " stackSize=" + history.getStack().size());
+        history.setCurrentCategory(category);
+        history.setCurrentPage(page);
         List<GuideTreeNode> children = category.getChildren();
-        if (children.isEmpty()) return;
-
+        if (children == null) children = new ArrayList<>();
         int maxPage = calculateMaxPage(children);
         page = Math.max(1, Math.min(page, maxPage));
 
@@ -82,10 +97,13 @@ public class CustomGuideRenderer {
         menu.addMenuOpeningHandler(SoundEffect.GUIDE_BUTTON_CLICK_SOUND::playFor);
 
         renderHeader(player, menu, history, mode);
+        if (children.isEmpty()) renderEmptyCategory(menu);
         renderContent(menu, children, player, history, mode, page, maxPage, category);
         renderFooter(menu, player, page, maxPage, history, mode, category);
 
         menu.open(player);
+        plugin.getScgMenuOpen().add(player.getUniqueId());
+        plugin.getScgCloseDedup().remove(player.getUniqueId());
     }
 
     private void renderHeader(Player player, ChestMenu menu,
@@ -98,6 +116,8 @@ public class CustomGuideRenderer {
 
         menu.addItem(SETTINGS_SLOT, ChestMenuUtils.getMenuButton(player));
         menu.addMenuClickHandler(SETTINGS_SLOT, (pl, s, is, action) -> {
+            CustomGuidePlugin.debug(pl, "SETTINGS click: marking externalView + opening settings");
+            SlimefunCustomGuideAPI.markExternalView(pl);
             SlimefunGuideSettings.openSettings(pl, pl.getInventory().getItemInMainHand());
             return false;
         });
@@ -123,12 +143,14 @@ public class CustomGuideRenderer {
                             "&fShift + \u5de6\u952e: &7\u8fd4\u56de\u4e3b\u83dc\u5355")));
             menu.addMenuClickHandler(slot, (pl, s1, is1, action1) -> {
                 if (action1.isShiftClicked()) {
+                    CustomGuidePlugin.debug(pl, "BACK click: shift-click, clearing history to main menu");
                     history.clear();
                     openMainMenu(pl, history, mode, history.getMainMenuPage());
                 } else {
-                    CustomGuideHistory.CategoryEntry back = history.goBack();
-                    if (back != null) {
-                        openMenu(pl, history, mode, back.getCategory(), back.getPage());
+                    CustomGuideHistory.HistoryEntry back = history.goBack();
+                    if (back != null && back.isCategory()) {
+                        CustomGuideHistory.CategoryEntry catBack = (CustomGuideHistory.CategoryEntry) back;
+                        openMenu(pl, history, mode, catBack.getCategory(), catBack.getPage());
                     } else {
                         history.clear();
                         openMainMenu(pl, history, mode, history.getMainMenuPage());
@@ -137,15 +159,13 @@ public class CustomGuideRenderer {
                 return false;
             });
         } else {
-            menu.addItem(slot,
-                    new CustomItemStack(ChestMenuUtils.getBackButton(player, "",
-                            ChatColor.GRAY + Slimefun.getLocalization()
-                                    .getMessage(player, "guide.back.guide"))));
-            menu.addMenuClickHandler(slot, (pl, s1, is1, action1) -> {
-                history.clear();
-                openMainMenu(pl, history, mode, history.getMainMenuPage());
-                return false;
-            });
+            ItemStack placeholder = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+            ItemMeta phMeta = placeholder.getItemMeta();
+            if (phMeta != null) {
+                phMeta.setDisplayName(" ");
+                placeholder.setItemMeta(phMeta);
+            }
+            menu.addItem(slot, placeholder);
         }
     }
 
@@ -173,24 +193,24 @@ public class CustomGuideRenderer {
             if (child.getType() == TreeNodeType.CATEGORY) {
                 CustomCategory cat = (CustomCategory) child;
                 menu.addMenuClickHandler(absSlot, (pl, s, is, action) -> {
+                    CustomGuidePlugin.debug(pl, "CATEGORY click: " + cat.getKey() + " from page " + page);
                     history.push(cat, page);
                     openMenu(pl, history, mode, cat, 1);
                     return false;
                 });
             } else if (child.getType() == TreeNodeType.ITEM) {
                 menu.addMenuClickHandler(absSlot, (pl, s, is, action) -> {
-                    CustomCategory currentCat = category;
-                    if (currentCat.getKey().equals(ROOT_KEY)) {
-                        currentCat = null;
-                    }
-                    final CustomCategory returnCat = currentCat;
-                    final int returnPage = page;
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         PlayerProfile.get(pl, profile -> {
-                            plugin.getItemDetailReturns().put(pl,
-                                    new CustomGuidePlugin.ItemDetailReturn(returnCat, returnPage, mode));
-                            SlimefunGuide.displayItem(profile,
-                                    ((CustomItemEntry) child).getSlimefunItem(), false);
+                            SlimefunItem slimefunItem = ((CustomItemEntry) child).getSlimefunItem();
+                            if (mode == SlimefunGuideMode.CHEAT_MODE) {
+                                handleCheatItemClick(pl, slimefunItem, action.isShiftClicked());
+                            } else {
+                                CustomGuidePlugin.debug(pl, "ITEM click: id=" + ((CustomItemEntry) child).getSlimefunId() +
+                                        ", marking externalView");
+                                SlimefunCustomGuideAPI.markExternalView(pl);
+                                Slimefun.getRegistry().getSlimefunGuide(mode).displayItem(profile, slimefunItem, true);
+                            }
                         });
                     });
                     return false;
@@ -199,6 +219,25 @@ public class CustomGuideRenderer {
                 menu.addMenuClickHandler(absSlot, ChestMenuUtils.getEmptyClickHandler());
             }
         }
+    }
+
+    private void handleCheatItemClick(Player player, SlimefunItem item, boolean fullStack) {
+        if (!player.hasPermission("slimefun.cheat.items")) {
+            Slimefun.getLocalization().sendMessage(player, "messages.no-permission", true);
+            return;
+        }
+        if (item instanceof MultiBlockMachine) {
+            Slimefun.getLocalization().sendMessage(player, "guide.cheat.no-multiblocks");
+            return;
+        }
+        ItemStack clonedItem = item.getItem().clone();
+        if (fullStack) clonedItem.setAmount(clonedItem.getMaxStackSize());
+        player.getInventory().addItem(clonedItem);
+    }
+
+    private void renderEmptyCategory(ChestMenu menu) {
+        menu.addItem(31, new CustomItemStack(new ItemStack(Material.BARRIER), ChatColor.RED + "空分类", ChatColor.GRAY + "这个分类下暂时没有内容"));
+        menu.addMenuClickHandler(31, ChestMenuUtils.getEmptyClickHandler());
     }
 
     private ItemStack buildCategoryItem(CustomCategory category, Player player,
@@ -244,11 +283,11 @@ public class CustomGuideRenderer {
             menu.addItem(i, ChestMenuUtils.getBackground(), ChestMenuUtils.getEmptyClickHandler());
         }
         if (maxPage > 1) {
+            boolean isRoot = category.getKey().equals(ROOT_KEY);
             menu.addItem(PREV_SLOT, ChestMenuUtils.getPreviousButton(player, page, maxPage));
             menu.addMenuClickHandler(PREV_SLOT, (pl, s, is, action) -> {
                 int next = page - 1;
                 if (next > 0) {
-                    boolean isRoot = category.getKey().equals(ROOT_KEY);
                     if (isRoot) { history.setMainMenuPage(next); openMainMenu(pl, history, mode, next); }
                     else openMenu(pl, history, mode, category, next);
                 }
@@ -259,7 +298,6 @@ public class CustomGuideRenderer {
             menu.addMenuClickHandler(NEXT_SLOT, (pl, s, is, action) -> {
                 int next = page + 1;
                 if (next <= maxPage) {
-                    boolean isRoot = category.getKey().equals(ROOT_KEY);
                     if (isRoot) { history.setMainMenuPage(next); openMainMenu(pl, history, mode, next); }
                     else openMenu(pl, history, mode, category, next);
                 }

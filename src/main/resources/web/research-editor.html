@@ -216,6 +216,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="color-picker-popup" id="color-picker"></div>
 <div id="toast"></div>
 <script>
+var API_TOKEN = sessionStorage.getItem('scg_token') || '';
+if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
+var nativeFetch = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  init = init || {};
+  init.headers = init.headers || {};
+  if (API_TOKEN) {
+    init.headers['X-SlimefunCustomGuide-Token'] = API_TOKEN;
+  }
+  return nativeFetch(input, init);
+};
 // ═══ MC Color Parser ═══
 var MC={
   colors:{0:'#000',1:'#00A',2:'#0A0',3:'#0AA',4:'#A00',5:'#A0A',6:'#FA0',7:'#AAA',8:'#555',9:'#55F',a:'#5F5',b:'#5FF',c:'#F55',d:'#F5F',e:'#FF5',f:'#FFF'},

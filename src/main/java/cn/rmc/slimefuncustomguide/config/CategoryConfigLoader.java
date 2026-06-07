@@ -16,8 +16,8 @@
 package cn.rmc.slimefuncustomguide.config;
 
 import cn.rmc.slimefuncustomguide.model.*;
+import cn.rmc.slimefuncustomguide.util.IconParser;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -124,23 +124,7 @@ public final class CategoryConfigLoader {
 
             if (idObj != null) {
                 String slimefunId = idObj.toString();
-                NamespacedKey key = null;
-                try {
-                    key = slimefunId.contains(":")
-                            ? NamespacedKey.fromString(slimefunId)
-                            : new NamespacedKey("slimefun", slimefunId);
-                } catch (IllegalArgumentException e) {
-                    logger.log(Level.WARNING, "Invalid item ID: {0}", slimefunId);
-                    continue;
-                }
-                if (key == null) {
-                    logger.log(Level.WARNING, "Could not parse item ID: {0}", slimefunId);
-                    continue;
-                }
-
-                SlimefunItem sfItem = SlimefunItem.getById(key.toString());
-                if (sfItem == null) sfItem = SlimefunItem.getById(slimefunId);
-
+                SlimefunItem sfItem = IconParser.findSlimefunItem(slimefunId);
                 if (sfItem == null) {
                     logger.log(Level.WARNING, "Item [{0}] not registered, skipped", slimefunId);
                     continue;
@@ -148,6 +132,10 @@ public final class CategoryConfigLoader {
 
                 int page = Math.max(1, getInt(rawItem, "page", 1));
                 int slot = getInt(rawItem, "slot", -1);
+                if (slot < 0 || slot >= 36) {
+                    logger.log(Level.WARNING, "Item [{0}] has invalid slot {1}, skipped", new Object[]{slimefunId, slot});
+                    continue;
+                }
                 parent.addChild(new CustomItemEntry(slimefunId, sfItem, page, slot));
 
             } else if (placeholderObj instanceof Map) {
@@ -189,6 +177,10 @@ public final class CategoryConfigLoader {
 
                 int page = Math.max(1, getInt(data, "page", 1));
                 int slot = getInt(data, "slot", -1);
+                if (slot < 0 || slot >= 36) {
+                    logger.log(Level.WARNING, "Placeholder has invalid slot {0}, skipped", slot);
+                    continue;
+                }
                 boolean glow = getBoolean(data, "glow", false);
                 parent.addChild(new CustomPlaceholderEntry(
                         new IconSource(iconType, iconId), display, lore, page, slot, glow));

@@ -26,7 +26,10 @@ import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import javax.annotation.Nullable;
 import java.lang.reflect.Field;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -37,6 +40,26 @@ import org.bukkit.inventory.meta.SkullMeta;
 public final class IconParser {
 
     private IconParser() {}
+
+    @Nullable
+    public static SlimefunItem findSlimefunItem(String id) {
+        if (id == null || id.isEmpty()) return null;
+        SlimefunItem item = SlimefunItem.getById(id);
+        if (item != null) return item;
+        String lowId = id.toLowerCase(Locale.ENGLISH);
+        NamespacedKey key = new NamespacedKey(Slimefun.instance(), lowId);
+        item = SlimefunItem.getById(key.toString());
+        if (item != null) return item;
+        Map<String, SlimefunItem> map = Slimefun.getRegistry().getSlimefunItemIds();
+        String keyStr = key.toString();
+        for (Map.Entry<String, SlimefunItem> e : map.entrySet()) {
+            String k = e.getKey();
+            if (k.equalsIgnoreCase(keyStr) || k.substring(k.indexOf(':') + 1).equalsIgnoreCase(lowId)) {
+                return e.getValue();
+            }
+        }
+        return null;
+    }
 
     public static Optional<ItemStack> parse(IconSource source, Logger logger) {
         if (source == null) return Optional.empty();
@@ -79,23 +102,7 @@ public final class IconParser {
             logger.warning("SLIMEFUN icon ID is empty");
             return Optional.empty();
         }
-        NamespacedKey key = null;
-        try {
-            key = id.contains(":")
-                    ? NamespacedKey.fromString(id)
-                    : new NamespacedKey(Slimefun.instance(), id);
-        } catch (IllegalArgumentException e) {
-            logger.log(Level.WARNING, "Invalid Slimefun ID format: {0}", id);
-            return Optional.empty();
-        }
-        if (key == null) {
-            logger.log(Level.WARNING, "Invalid Slimefun ID: {0}", id);
-            return Optional.empty();
-        }
-        SlimefunItem sfItem = SlimefunItem.getById(key.toString());
-        if (sfItem == null) {
-            sfItem = SlimefunItem.getById(key.getKey());
-        }
+        SlimefunItem sfItem = findSlimefunItem(id);
         if (sfItem != null) {
             return Optional.of(sfItem.getItem().clone());
         }

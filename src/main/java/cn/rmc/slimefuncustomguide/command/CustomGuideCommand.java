@@ -35,9 +35,14 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public class CustomGuideCommand implements CommandExecutor, TabCompleter {
+
+    private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("[&§][0-9a-fA-Fk-oK-OrR]");
 
     private final CustomGuidePlugin plugin;
 
@@ -105,9 +110,9 @@ public class CustomGuideCommand implements CommandExecutor, TabCompleter {
 
             String raw = group.getUnlocalizedName();
             if (raw == null || raw.isEmpty()) continue;
-            String key = raw.replaceAll("[&§][0-9a-fA-Fk-oK-OrR]", "");
+            String key = COLOR_CODE_PATTERN.matcher(raw).replaceAll("");
             if (key.isEmpty()) continue;
-            String display = "&f" + group.getDisplayName(null);
+            String display = raw;
 
             ItemStack repItem = group.getItem(null);
             String iconId = "CHEST";
@@ -171,6 +176,16 @@ public class CustomGuideCommand implements CommandExecutor, TabCompleter {
         }
 
         File file = new File(plugin.getDataFolder(), "categories.yml");
+        if (file.exists()) {
+            File backup = new File(plugin.getDataFolder(), "categories.yml.bak");
+            try {
+                Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                sender.sendMessage("§7已备份: " + backup.getAbsolutePath());
+            } catch (Exception e) {
+                sender.sendMessage("§c备份失败，已取消导出: " + e.getMessage());
+                return;
+            }
+        }
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
             writer.write(yaml.saveToString());
             writer.flush();

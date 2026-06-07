@@ -25,13 +25,22 @@ public class WebServer {
 
     private HttpServer server;
 
-    public void start(String bind, int port, WebApiHandler handler) throws Exception {
-        ResearchApiHandler researchHandler = new ResearchApiHandler(handler.getPlugin());
+    public void start(String bind, int port, WebApiHandler handler,
+                      boolean categoriesEditor, boolean recipesEditor, boolean researchesEditor) throws Exception {
         server = HttpServer.create(new InetSocketAddress(bind, port), 0);
         server.createContext("/", handler);
-        server.createContext("/editor.html", researchHandler);
-        server.createContext("/api/researches", researchHandler);
-        server.createContext("/api/slimefun-items", researchHandler);
+        if (researchesEditor) {
+            ResearchApiHandler researchHandler = new ResearchApiHandler(handler.getPlugin());
+            server.createContext("/editor.html", researchHandler);
+            server.createContext("/api/researches", researchHandler);
+            server.createContext("/api/slimefun-items", researchHandler);
+        }
+        if (recipesEditor) {
+            RecipeApiHandler recipeHandler = new RecipeApiHandler(handler.getPlugin());
+            server.createContext("/recipes.html", recipeHandler);
+            server.createContext("/api/recipes", recipeHandler);
+            server.createContext("/api/recipe-types", recipeHandler);
+        }
         server.setExecutor(null);
         server.start();
     }

@@ -40,6 +40,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
     <div id="left-panel">
       <div class="panel-title">📂 分类结构</div>
       <div id="left-toolbar">
+        <input type="text" id="tree-search" placeholder="搜索分类/物品..." oninput="filterTree()" style="width:100%;padding:4px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;font-size:12px;margin-bottom:4px;">
         <button class="btn btn-sm btn-accent" onclick="addCategory()">+ 分类</button>
         <button class="btn btn-sm btn-accent" onclick="addPlaceholder()">+ 占位</button>
         <button class="btn btn-sm btn-accent" onclick="addItem()">+ 物品</button>
@@ -122,15 +123,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       <button class="btn btn-sm" onclick="closePicker()">✕</button>
     </div>
     <input type="text" id="picker-search" placeholder="搜索物品名或ID..." oninput="searchMaterials()">
+    <div id="picker-filters" class="picker-filters" style="display:none;">
+      <button class="picker-filter-btn active" data-filter="all">全部</button>
+      <button class="picker-filter-btn" data-filter="added">已添加</button>
+      <button class="picker-filter-btn" data-filter="not_added">未添加</button>
+    </div>
     <div id="picker-results" class="picker-results">
       <div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>
     </div>
   </div>
-</div>
-
-<div id="color-picker" class="color-picker" style="display:none;">
-  <div class="color-picker-grid" id="color-picker-grid"></div>
-  <div class="color-picker-formats" id="color-picker-formats"></div>
 </div>
 
 <div id="context-menu" class="context-menu" style="display:none;">

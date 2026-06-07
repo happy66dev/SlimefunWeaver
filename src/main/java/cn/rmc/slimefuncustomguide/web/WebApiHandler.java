@@ -17,6 +17,11 @@ package cn.rmc.slimefuncustomguide.web;
 
 import cn.rmc.slimefuncustomguide.CustomGuidePlugin;
 import cn.rmc.slimefuncustomguide.model.CustomCategory;
+import cn.rmc.slimefuncustomguide.util.VanillaMaterialLocalization;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -66,11 +71,16 @@ public class WebApiHandler implements HttpHandler {
             String path = exchange.getRequestURI().getPath();
             String method = exchange.getRequestMethod();
 
-            if (path.equals("/") || path.equals("/index.html")) {
+            if (path.equals("/api/login")) {
+                handleLogin(exchange, method);
+            } else if (path.equals("/") || path.equals("/index.html")) {
+                if (!WebSecurity.isAccessAllowed(plugin, exchange)) { serveContent(exchange, loginHtml(), "text/html"); return; }
                 serveContent(exchange, indexHtml, "text/html");
             } else if (path.equals("/style.css")) {
+                if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
                 serveContent(exchange, loadFileFromJar("web/style.css"), "text/css");
             } else if (path.equals("/editor.js")) {
+                if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
                 serveContent(exchange, loadFileFromJar("web/editor.js"), "application/javascript");
             } else if (path.equals("/api/categories")) {
                 handleCategories(exchange, method);
@@ -87,9 +97,39 @@ public class WebApiHandler implements HttpHandler {
         }
     }
 
+    private void handleLogin(HttpExchange exchange, String method) throws IOException {
+        if (!"POST".equalsIgnoreCase(method)) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+        String body;
+        try {
+            body = WebSecurity.readBody(exchange);
+        } catch (WebSecurity.BodyTooLargeException e) {
+            exchange.sendResponseHeaders(413, -1);
+            return;
+        }
+        if (!WebSecurity.isLoginValid(plugin, body)) {
+            exchange.sendResponseHeaders(403, -1);
+            return;
+        }
+        String token = plugin.getConfig().getString("web-editor.token", "");
+        WebSecurity.setAuthCookie(exchange, token);
+        byte[] bytes = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        exchange.getResponseHeaders().set("Cache-Control", "no-store");
+        exchange.sendResponseHeaders(200, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
+    }
+
+    private String loginHtml() {
+        return "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>登录</title></head><body style=\"background:#0d1117;color:#c9d1d9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\"><form onsubmit=\"var t=document.getElementById('t').value;var rd=new URLSearchParams(location.search).get('redirect')||'/';fetch('/api/login',{method:'POST',body:'token='+encodeURIComponent(t)}).then(function(r){if(r.ok)location.href=rd;else alert('Token错误')});return false\" style=\"background:#161b22;padding:24px;border:1px solid #30363d;border-radius:8px\"><div style=\"margin-bottom:12px\">Web 编辑器 Token</div><input id=\"t\" type=\"password\" autofocus style=\"padding:8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d\"><button style=\"margin-left:8px;padding:8px\">登录</button></form></body></html>";
+    }
+
     private void serveContent(HttpExchange exchange, String content, String contentType) throws IOException {
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=UTF-8");
+        exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(200, bytes.length);
         OutputStream os = exchange.getResponseBody();
         os.write(bytes);
@@ -97,6 +137,10 @@ public class WebApiHandler implements HttpHandler {
     }
 
     private void handleCategories(HttpExchange exchange, String method) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) {
+            exchange.sendResponseHeaders(403, -1);
+            return;
+        }
         if ("GET".equalsIgnoreCase(method)) {
             List<CustomCategory> cats = plugin.getRootCategories();
             String json = JsonUtil.categoriesToJson(cats);
@@ -107,7 +151,17 @@ public class WebApiHandler implements HttpHandler {
             os.write(bytes);
             os.close();
         } else if ("PUT".equalsIgnoreCase(method)) {
-            String body = readBody(exchange);
+            if (!WebSecurity.isWriteAllowed(plugin, exchange)) {
+                exchange.sendResponseHeaders(403, -1);
+                return;
+            }
+            String body;
+            try {
+                body = WebSecurity.readBody(exchange);
+            } catch (WebSecurity.BodyTooLargeException e) {
+                exchange.sendResponseHeaders(413, -1);
+                return;
+            }
             if (body == null || body.isEmpty()) {
                 exchange.sendResponseHeaders(400, -1);
                 return;
@@ -129,29 +183,16 @@ public class WebApiHandler implements HttpHandler {
         YamlConfiguration yaml = new YamlConfiguration();
         ConfigurationSection root = yaml.createSection("categories");
 
-        String content = json.trim();
-        if (content.startsWith("{\"categories\":[")) {
-            int end = content.lastIndexOf(']');
-            if (end >= 0) {
-                content = content.substring("{\"categories\":[".length(), end);
-            }
-            int depth = 0;
-            int start = -1;
-            for (int i = 0; i < content.length(); i++) {
-                char c = content.charAt(i);
-                if (c == '{') {
-                    if (depth == 0) start = i;
-                    depth++;
-                } else if (c == '}') {
-                    depth--;
-                    if (depth == 0 && start >= 0) {
-                        String catJson = content.substring(start, i + 1);
-                        parseCategoryJson(catJson, root);
-                        start = -1;
-                    }
-                } else if (c == '"' && depth == 0) {
-                    i = skipString(content, i);
-                }
+        JsonElement parsed = new JsonParser().parse(json);
+        if (!parsed.isJsonObject()) return;
+        JsonObject rootObj = parsed.getAsJsonObject();
+        JsonArray categoriesArr = (rootObj.has("categories") && rootObj.get("categories").isJsonArray())
+                ? rootObj.getAsJsonArray("categories") : null;
+        if (categoriesArr == null) return;
+
+        for (JsonElement elem : categoriesArr) {
+            if (elem.isJsonObject()) {
+                parseCategoryFromJson(elem.getAsJsonObject(), root);
             }
         }
 
@@ -169,239 +210,118 @@ public class WebApiHandler implements HttpHandler {
                     StandardCopyOption.ATOMIC_MOVE,
                     StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to replace categories.yml", e);
+            try {
+                Files.move(tempFile.toPath(), finalFile.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e2) {
+                plugin.getLogger().log(Level.WARNING, "Failed to replace categories.yml", e2);
+            }
         }
     }
 
-    private void parseCategoryJson(String json, ConfigurationSection parent) {
-        String key = extractString(json, "key");
-        if (key == null) return;
-        String display = extractString(json, "display");
-        if (display == null) display = key;
-        boolean glow = extractBoolean(json, "glow");
-        int page = extractInt(json, "page", 1);
-        int slot = extractInt(json, "slot", 10);
-        String iconType = extractNestedString(json, "icon", "type");
-        String iconId = extractNestedString(json, "icon", "id");
+    private void parseCategoryFromJson(JsonObject obj, ConfigurationSection parent) {
+        String key = (obj.has("key") && !obj.get("key").isJsonNull()) ? obj.get("key").getAsString() : null;
+        if (key == null || key.isEmpty()) return;
 
         ConfigurationSection section = parent.createSection(key);
-        if (display != null) section.set("display", display);
-        ConfigurationSection iconSec = section.createSection("icon");
-        iconSec.set("type", iconType != null ? iconType : "VANILLA");
-        iconSec.set("id", iconId != null ? iconId : "BOOK");
-        section.set("page", page);
-        section.set("slot", slot);
-        if (glow) section.set("glow", true);
 
-        List<String> lore = extractStringList(json, "lore");
-        if (lore != null && !lore.isEmpty()) section.set("lore", lore);
+        if (obj.has("display") && !obj.get("display").isJsonNull())
+            section.set("display", obj.get("display").getAsString());
 
-        String itemsJson = extractArray(json, "items");
-        if (itemsJson != null && !itemsJson.isEmpty()) {
-            List<Object> itemList = new ArrayList<>();
-            int depth = 0, istart = -1;
-            for (int i = 0; i < itemsJson.length(); i++) {
-                char c = itemsJson.charAt(i);
-                if (c == '{') {
-                    if (depth == 0) istart = i;
-                    depth++;
-                } else if (c == '}') {
-                    depth--;
-                    if (depth == 0 && istart >= 0) {
-                        String itemJson = itemsJson.substring(istart, i + 1);
-                        String type = extractString(itemJson, "type");
-                        if ("ITEM".equals(type)) {
-                            Map<String, Object> itemMap = new LinkedHashMap<>();
-                            itemMap.put("id", extractString(itemJson, "id"));
-                            itemMap.put("page", extractInt(itemJson, "page", 1));
-                            itemMap.put("slot", extractInt(itemJson, "slot", 10));
-                            itemList.add(itemMap);
-                        } else if ("PLACEHOLDER".equals(type)) {
-                            Map<String, Object> ph = new LinkedHashMap<>();
-                            Map<String, Object> phIcon = new LinkedHashMap<>();
-                            phIcon.put("type", extractNestedString(itemJson, "icon", "type"));
-                            phIcon.put("id", extractNestedString(itemJson, "icon", "id"));
-                            Map<String, Object> placeholder = new LinkedHashMap<>();
-                            placeholder.put("icon", phIcon);
-                            String phDisplay = extractString(itemJson, "display");
-                            if (phDisplay != null && !phDisplay.isEmpty()) placeholder.put("display", phDisplay);
-                            if (extractBoolean(itemJson, "glow")) placeholder.put("glow", true);
-                            List<String> phLore = extractStringList(itemJson, "lore");
-                            if (phLore != null && !phLore.isEmpty()) placeholder.put("lore", phLore);
-                            placeholder.put("page", extractInt(itemJson, "page", 1));
-                            placeholder.put("slot", extractInt(itemJson, "slot", 10));
-                            ph.put("placeholder", placeholder);
-                            itemList.add(ph);
-                        }
-                        istart = -1;
+        if (obj.has("page") && !obj.get("page").isJsonNull())
+            section.set("page", obj.get("page").getAsInt());
+
+        if (obj.has("slot") && !obj.get("slot").isJsonNull())
+            section.set("slot", obj.get("slot").getAsInt());
+
+        if (obj.has("glow") && !obj.get("glow").isJsonNull() && obj.get("glow").getAsBoolean())
+            section.set("glow", true);
+
+        if (obj.has("icon") && obj.get("icon").isJsonObject()) {
+            JsonObject iconObj = obj.getAsJsonObject("icon");
+            ConfigurationSection iconSection = section.createSection("icon");
+            if (iconObj.has("type"))
+                iconSection.set("type", iconObj.get("type").getAsString());
+            if (iconObj.has("id"))
+                iconSection.set("id", iconObj.get("id").getAsString());
+        }
+
+        if (obj.has("lore") && obj.get("lore").isJsonArray()) {
+            JsonArray loreArr = obj.getAsJsonArray("lore");
+            List<String> lore = new ArrayList<>();
+            for (JsonElement e : loreArr) {
+                if (e.isJsonPrimitive()) lore.add(e.getAsString());
+            }
+            if (!lore.isEmpty()) section.set("lore", lore);
+        }
+
+        if (obj.has("items") && obj.get("items").isJsonArray()) {
+            JsonArray itemsArr = obj.getAsJsonArray("items");
+            List<Map<String, Object>> itemList = new ArrayList<>();
+            for (JsonElement itemElem : itemsArr) {
+                if (!itemElem.isJsonObject()) continue;
+                JsonObject itemObj = itemElem.getAsJsonObject();
+                String type = itemObj.has("type") ? itemObj.get("type").getAsString() : "ITEM";
+                if ("PLACEHOLDER".equals(type)) {
+                    Map<String, Object> ph = new LinkedHashMap<>();
+                    Map<String, Object> phIcon = new LinkedHashMap<>();
+                    if (itemObj.has("icon") && itemObj.get("icon").isJsonObject()) {
+                        JsonObject pIcon = itemObj.getAsJsonObject("icon");
+                        if (pIcon.has("type")) phIcon.put("type", pIcon.get("type").getAsString());
+                        if (pIcon.has("id")) phIcon.put("id", pIcon.get("id").getAsString());
                     }
-                } else if (c == '"' && depth == 0) {
-                    i = skipString(itemsJson, i);
+                    Map<String, Object> placeholder = new LinkedHashMap<>();
+                    placeholder.put("icon", phIcon);
+                    if (itemObj.has("display") && !itemObj.get("display").isJsonNull())
+                        placeholder.put("display", itemObj.get("display").getAsString());
+                    if (itemObj.has("glow") && !itemObj.get("glow").isJsonNull() && itemObj.get("glow").getAsBoolean())
+                        placeholder.put("glow", true);
+                    if (itemObj.has("lore") && itemObj.get("lore").isJsonArray()) {
+                        List<String> pLore = new ArrayList<>();
+                        for (JsonElement e : itemObj.getAsJsonArray("lore")) {
+                            if (e.isJsonPrimitive()) pLore.add(e.getAsString());
+                        }
+                        if (!pLore.isEmpty()) placeholder.put("lore", pLore);
+                    }
+                    if (itemObj.has("page")) placeholder.put("page", itemObj.get("page").getAsInt());
+                    if (itemObj.has("slot")) placeholder.put("slot", itemObj.get("slot").getAsInt());
+                    ph.put("placeholder", placeholder);
+                    itemList.add(ph);
+                } else {
+                    Map<String, Object> itemMap = new LinkedHashMap<>();
+                    itemMap.put("id", itemObj.has("id") ? itemObj.get("id").getAsString() : "UNKNOWN");
+                    if (itemObj.has("page")) itemMap.put("page", itemObj.get("page").getAsInt());
+                    if (itemObj.has("slot")) itemMap.put("slot", itemObj.get("slot").getAsInt());
+                    itemList.add(itemMap);
                 }
             }
             if (!itemList.isEmpty()) section.set("items", itemList);
         }
 
-        String childrenJson = extractArray(json, "children");
-        if (childrenJson != null && !childrenJson.isEmpty()) {
-            int depth = 0, cstart = -1;
-            for (int i = 0; i < childrenJson.length(); i++) {
-                char c = childrenJson.charAt(i);
-                if (c == '{') {
-                    if (depth == 0) cstart = i;
-                    depth++;
-                } else if (c == '}') {
-                    depth--;
-                    if (depth == 0 && cstart >= 0) {
-                        parseCategoryJson(childrenJson.substring(cstart, i + 1), section);
-                        cstart = -1;
-                    }
-                } else if (c == '"' && depth == 0) {
-                    i = skipString(childrenJson, i);
+        if (obj.has("children") && obj.get("children").isJsonArray()) {
+            JsonArray childrenArr = obj.getAsJsonArray("children");
+            for (JsonElement childElem : childrenArr) {
+                if (childElem.isJsonObject()) {
+                    parseCategoryFromJson(childElem.getAsJsonObject(), section);
                 }
             }
         }
-    }
-
-    private static String extractString(String json, String key) {
-        String search = "\"" + key + "\":\"";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        int start = idx + search.length();
-        StringBuilder sb = new StringBuilder();
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\\' && i + 1 < json.length()) {
-                char next = json.charAt(i + 1);
-                switch (next) {
-                    case '"': sb.append('"'); i++; break;
-                    case '\\': sb.append('\\'); i++; break;
-                    case 'n': sb.append('\n'); i++; break;
-                    case 'r': sb.append('\r'); i++; break;
-                    case 't': sb.append('\t'); i++; break;
-                    default: sb.append(c); break;
-                }
-            } else if (c == '"') {
-                break;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static String extractNestedString(String json, String parentKey, String childKey) {
-        String search = "\"" + parentKey + "\":{";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        return extractString(json.substring(idx), childKey);
-    }
-
-    private static List<String> extractStringList(String json, String key) {
-        String search = "\"" + key + "\":[";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        int start = idx + search.length();
-        List<String> list = new ArrayList<>();
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == ']') break;
-            if (c == '"') {
-                StringBuilder sb = new StringBuilder();
-                i++;
-                while (i < json.length()) {
-                    if (json.charAt(i) == '\\' && i + 1 < json.length()) {
-                        char next = json.charAt(i + 1);
-                        switch (next) {
-                            case '"': sb.append('"'); i++; break;
-                            case '\\': sb.append('\\'); i++; break;
-                            case 'n': sb.append('\n'); i++; break;
-                            case 'r': sb.append('\r'); i++; break;
-                            case 't': sb.append('\t'); i++; break;
-                            default: sb.append(json.charAt(i)); break;
-                        }
-                    } else if (json.charAt(i) == '"') {
-                        break;
-                    } else {
-                        sb.append(json.charAt(i));
-                    }
-                    i++;
-                }
-                list.add(sb.toString());
-            }
-        }
-        return list;
-    }
-
-    private static String extractArray(String json, String key) {
-        String search = "\"" + key + "\":[";
-        int idx = json.indexOf(search);
-        if (idx < 0) return null;
-        int start = idx + search.length();
-        int depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '[') depth++;
-            else if (c == ']') {
-                if (depth == 0) return json.substring(start, i);
-                depth--;
-            } else if (c == '"') {
-                i = skipString(json, i);
-            }
-        }
-        return null;
-    }
-
-    private static boolean extractBoolean(String json, String key) {
-        String search = "\"" + key + "\":";
-        int idx = json.indexOf(search);
-        if (idx < 0) return false;
-        idx += search.length();
-        return json.regionMatches(idx, "true", 0, 4);
-    }
-
-    private static int extractInt(String json, String key, int defaultVal) {
-        String search = "\"" + key + "\":";
-        int idx = json.indexOf(search);
-        if (idx < 0) return defaultVal;
-        idx += search.length();
-        StringBuilder sb = new StringBuilder();
-        for (int i = idx; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if ((c >= '0' && c <= '9') || c == '-') sb.append(c);
-            else break;
-        }
-        if (sb.length() == 0) return defaultVal;
-        try { return Integer.parseInt(sb.toString()); }
-        catch (NumberFormatException e) { return defaultVal; }
-    }
-
-    private static int skipString(String s, int i) {
-        i++;
-        while (i < s.length()) {
-            if (s.charAt(i) == '\\' && i + 1 < s.length()) i += 2;
-            else if (s.charAt(i) == '"') break;
-            else i++;
-        }
-        return i;
-    }
-
-    private String readBody(HttpExchange exchange) throws IOException {
-        InputStream in = exchange.getRequestBody();
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) baos.write(buf, 0, n);
-        return new String(baos.toByteArray(), StandardCharsets.UTF_8);
     }
 
     private void handleMaterials(HttpExchange exchange) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) {
+            exchange.sendResponseHeaders(403, -1);
+            return;
+        }
         String query = exchange.getRequestURI().getQuery();
         String q = "";
+        String typeFilter = "";
         if (query != null) {
             for (String param : query.split("&")) {
                 if (param.startsWith("q=")) {
                     q = URLDecoder.decode(param.substring(2), StandardCharsets.UTF_8).toLowerCase();
+                } else if (param.startsWith("type=")) {
+                    typeFilter = URLDecoder.decode(param.substring(5), StandardCharsets.UTF_8).toUpperCase();
                 }
             }
         }
@@ -419,32 +339,36 @@ public class WebApiHandler implements HttpHandler {
         boolean first = true;
         boolean truncated = false;
 
-        for (Material mat : Material.values()) {
-            if (mat.isItem() && mat.name().toLowerCase().contains(q)) {
-                if (!first) sb.append(',');
-                sb.append("{\"type\":\"VANILLA\",\"id\":\"").append(mat.name());
-                sb.append("\",\"display\":\"").append(JsonUtil.escape(materialName(mat))).append("\"}");
-                first = false;
-                if (sb.length() > 5000) {
-                    truncated = true;
-                    break;
+        if (typeFilter.isEmpty() || typeFilter.equals("VANILLA")) {
+            for (Material mat : Material.values()) {
+                if (mat.isItem() && mat.name().toLowerCase().contains(q)) {
+                    if (!first) sb.append(',');
+                    sb.append("{\"type\":\"VANILLA\",\"id\":\"").append(mat.name());
+                    sb.append("\",\"display\":\"").append(JsonUtil.escape(VanillaMaterialLocalization.getItemName(mat))).append("\"}");
+                    first = false;
+                    if (sb.length() > 5000) {
+                        truncated = true;
+                        break;
+                    }
                 }
             }
         }
 
-        for (SlimefunItem sfItem : Slimefun.getRegistry().getEnabledSlimefunItems()) {
-            String name = sfItem.getItemName();
-            String id = sfItem.getId();
-            if ((name != null && name.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
-                if (!first) sb.append(',');
-                sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(JsonUtil.escape(id));
-                sb.append("\",\"display\":\"").append(JsonUtil.escape(name != null ? name : id));
-                String groupName = sfItem.getItemGroup() != null ? sfItem.getItemGroup().getUnlocalizedName() : "unknown";
-                sb.append("\",\"group\":\"").append(JsonUtil.escape(groupName)).append("\"}");
-                first = false;
-                if (sb.length() > 10000) {
-                    truncated = true;
-                    break;
+        if (!truncated && (typeFilter.isEmpty() || typeFilter.equals("SLIMEFUN"))) {
+            for (SlimefunItem sfItem : Slimefun.getRegistry().getEnabledSlimefunItems()) {
+                String name = sfItem.getItemName();
+                String id = sfItem.getId();
+                if ((name != null && name.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
+                    if (!first) sb.append(',');
+                    sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(JsonUtil.escape(id));
+                    sb.append("\",\"display\":\"").append(JsonUtil.escape(name != null ? name : id));
+                    String groupName = sfItem.getItemGroup() != null ? sfItem.getItemGroup().getUnlocalizedName() : "unknown";
+                    sb.append("\",\"group\":\"").append(JsonUtil.escape(groupName)).append("\"}");
+                    first = false;
+                    if (sb.length() > 10000) {
+                        truncated = true;
+                        break;
+                    }
                 }
             }
         }
@@ -462,12 +386,18 @@ public class WebApiHandler implements HttpHandler {
     }
 
     private void handleItemGroups(HttpExchange exchange) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) {
+            exchange.sendResponseHeaders(403, -1);
+            return;
+        }
         StringBuilder sb = new StringBuilder("{\"groups\":[");
         boolean first = true;
         for (io.github.thebusybiscuit.slimefun4.api.items.ItemGroup group : Slimefun.getRegistry().getAllItemGroups()) {
             if (!first) sb.append(',');
             sb.append("{\"key\":\"").append(JsonUtil.escape(group.getUnlocalizedName()));
-            sb.append("\",\"display\":\"").append(JsonUtil.escape(group.getDisplayName(null))).append("\"}");
+            sb.append("\",\"display\":\"").append(JsonUtil.escape(
+                    group.getUnlocalizedName()
+            )).append("\"}");
             first = false;
         }
         sb.append("]}");
@@ -476,18 +406,6 @@ public class WebApiHandler implements HttpHandler {
         exchange.sendResponseHeaders(200, bytes.length);
         exchange.getResponseBody().write(bytes);
         exchange.getResponseBody().close();
-    }
-
-    private static String materialName(Material mat) {
-        String name = mat.name().replace('_', ' ').toLowerCase();
-        StringBuilder sb = new StringBuilder();
-        boolean capitalize = true;
-        for (char c : name.toCharArray()) {
-            if (c == ' ') { sb.append(' '); capitalize = true; }
-            else if (capitalize) { sb.append(Character.toUpperCase(c)); capitalize = false; }
-            else { sb.append(c); }
-        }
-        return sb.toString();
     }
 
 }

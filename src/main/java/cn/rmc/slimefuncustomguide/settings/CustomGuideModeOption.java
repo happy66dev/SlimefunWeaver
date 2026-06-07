@@ -16,9 +16,13 @@
 package cn.rmc.slimefuncustomguide.settings;
 
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
+import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuide;
+import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideOption;
+import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
 import cn.rmc.slimefuncustomguide.CustomGuidePlugin;
 import cn.rmc.slimefuncustomguide.listener.CustomGuideListener;
+import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -43,7 +47,7 @@ public class CustomGuideModeOption implements SlimefunGuideOption<Boolean> {
     @Nonnull
     @Override
     public NamespacedKey getKey() {
-        return new NamespacedKey("slimefuncustomguide", "custom_guide_mode");
+        return CustomGuideListener.MODE_KEY;
     }
 
     @Nonnull
@@ -67,12 +71,13 @@ public class CustomGuideModeOption implements SlimefunGuideOption<Boolean> {
     @Override
     @ParametersAreNonnullByDefault
     public void onClick(Player p, ItemStack guide) {
+        if (!isSlimefunGuide(guide)) return;
         if (CustomGuideListener.isCustomMode(guide)) {
             CustomGuideListener.clearCustomMode(guide);
         } else {
             CustomGuideListener.setCustomMode(guide);
         }
-        CustomGuideSettings.openSettings(p, guide);
+        SlimefunGuideSettings.openSettings(p, guide);
     }
 
     @Nonnull
@@ -84,10 +89,16 @@ public class CustomGuideModeOption implements SlimefunGuideOption<Boolean> {
     @Override
     @ParametersAreNonnullByDefault
     public void setSelectedOption(Player p, ItemStack guide, Boolean value) {
+        if (!isSlimefunGuide(guide)) return;
         if (Boolean.TRUE.equals(value)) {
             CustomGuideListener.setCustomMode(guide);
         } else {
             CustomGuideListener.clearCustomMode(guide);
         }
+    }
+
+    private boolean isSlimefunGuide(ItemStack guide) {
+        return SlimefunUtils.isItemSimilar(guide, SlimefunGuide.getItem(SlimefunGuideMode.SURVIVAL_MODE), true, false)
+                || SlimefunUtils.isItemSimilar(guide, SlimefunGuide.getItem(SlimefunGuideMode.CHEAT_MODE), true, false);
     }
 }

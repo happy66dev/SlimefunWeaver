@@ -136,7 +136,8 @@ var Dialog = {
 
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
-  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all'
+  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all',
+  treeRootIndex: []
 };
 
 function $(id) { return document.getElementById(id); }
@@ -171,6 +172,7 @@ async function discardChanges() {
     loadCategories().then(function() {
       state.selectedCategory = null;
       state.selectedNode = null;
+      state.treeRootIndex = [];
       state.currentPage = 1;
       renderGrid();
       renderEditor();
@@ -179,23 +181,95 @@ async function discardChanges() {
   });
 }
 
+function resolveTreeRoot() {
+  if (!state.treeRootIndex || state.treeRootIndex.length === 0) return null;
+  var cats = state.categories;
+  var found = null;
+  for (var i = 0; i < state.treeRootIndex.length; i++) {
+    var idx = state.treeRootIndex[i];
+    if (idx < 0 || idx >= cats.length) return null;
+    found = cats[idx];
+    cats = [];
+    if (found.children) {
+      for (var j = 0; j < found.children.length; j++) {
+        if (found.children[j].key) cats.push(found.children[j]);
+      }
+    }
+  }
+  return found;
+}
+
 function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
 
-  var rootLi = document.createElement('li');
-  rootLi.className = 'tree-root-entry';
-  rootLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">[根级别]</span>';
-  rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
-  if (state.selectedCategory === null) rootLi.classList.add('active');
-  root.appendChild(rootLi);
+  var treeRoot = resolveTreeRoot();
 
-  var cats = state.categories || [];
-  cats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, 0)); });
+  if (treeRoot) {
+    var backLi = document.createElement('li');
+    backLi.className = 'tree-root-entry';
+    var parentDisplay = '';
+    if (state.treeRootIndex.length === 1) {
+      parentDisplay = '[根级别]';
+    } else {
+      var parentCats = state.categories;
+      for (var pi = 0; pi < state.treeRootIndex.length - 1; pi++) {
+        var pidx = state.treeRootIndex[pi];
+        if (pidx >= 0 && pidx < parentCats.length) {
+          var pc = parentCats[pidx];
+          parentCats = [];
+          if (pc.children) for (var pj = 0; pj < pc.children.length; pj++) { if (pc.children[pj].key) parentCats.push(pc.children[pj]); }
+        }
+      }
+      var pidx = state.treeRootIndex[state.treeRootIndex.length - 1];
+      var immediateParent = (pidx >= 0 && pidx < parentCats.length) ? parentCats[pidx] : null;
+      parentDisplay = immediateParent ? (immediateParent.display || immediateParent.key) : '?';
+    }
+    backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">↶ 返回 ' + MC.escapeHtml(MC.strip(parentDisplay)) + '</span>';
+    backLi.onclick = function(e) { e.stopPropagation(); goBackTree(); };
+    root.appendChild(backLi);
+  } else {
+    var rootLi = document.createElement('li');
+    rootLi.className = 'tree-root-entry';
+    rootLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">[根级别]</span>';
+    rootLi.onclick = function(e) { e.stopPropagation(); selectRoot(); };
+    if (state.selectedCategory === null) rootLi.classList.add('active');
+    root.appendChild(rootLi);
+  }
+
+  var displayCats;
+  if (treeRoot) {
+    displayCats = treeRoot.children || [];
+  } else {
+    displayCats = state.categories || [];
+  }
+  var depth = treeRoot ? 0 : 0;
+  displayCats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, depth)); });
   applyTreeFilter();
 }
 
+function goBackTree() {
+  state.treeRootIndex.pop();
+  if (state.treeRootIndex.length === 0) {
+    state.selectedCategory = null;
+    state.selectedNode = null;
+  } else {
+    var backRoot = resolveTreeRoot();
+    if (backRoot) {
+      state.selectedCategory = backRoot;
+      state.selectedNode = backRoot;
+    }
+  }
+  if (state.selectedNode === null && state.selectedCategory === null) {
+    state.currentPage = 1;
+  }
+  renderTree();
+  renderGrid();
+  renderEditor();
+}
+
 function selectRoot() {
+  state.treeRootIndex = [];
   state.selectedCategory = null;
   state.selectedNode = null;
   state.currentPage = 1;
@@ -245,6 +319,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
   li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
+  li.ondblclick = function(e) { e.stopPropagation(); enterCategory(cat, index, parentRef); };
   if (state.selectedNode === cat) li.classList.add('active');
 
   var ul = null;
@@ -273,6 +348,27 @@ function buildTreeItem(cat, index, parentRef, depth) {
 }
 
 function selectCategory(cat, index, parentRef) {
+  state.selectedNode = cat;
+  state.selectedCategory = cat;
+  state.currentPage = 1;
+  renderTree();
+  renderGrid();
+  renderEditor();
+}
+
+function enterCategory(cat, index, parentRef) {
+  if (!cat.children || cat.children.length === 0) return;
+  var parentCats = [];
+  if (parentRef === null) {
+    parentCats = state.categories;
+  } else if (parentRef.children) {
+    for (var i = 0; i < parentRef.children.length; i++) { if (parentRef.children[i].key) parentCats.push(parentRef.children[i]); }
+  }
+  var catIdx = parentCats.indexOf(cat);
+  if (catIdx < 0) {
+    catIdx = index;
+  }
+  state.treeRootIndex.push(catIdx);
   state.selectedNode = cat;
   state.selectedCategory = cat;
   state.currentPage = 1;

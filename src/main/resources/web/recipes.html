@@ -37,7 +37,6 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .item-row:hover{background:#1a1f2b;color:#c9d1d9}
 .item-row.active{border-left-color:#e94560;background:#1a1f2b;color:#e94560}
 .item-row .rtag{font-size:9px;color:#484f58}
-.grid-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
 .recipe-info{display:flex;gap:8px;align-items:center;padding:8px 16px;background:#1a2230;border-radius:6px;border:1px solid #30363d;font-size:12px;flex-wrap:wrap;justify-content:center}
 .recipe-info .ri-name{color:#79c0ff;font-weight:600}
 .recipe-info .ri-key{color:#8b949e;font-size:10px}
@@ -61,6 +60,10 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .out-item{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:5px 8px;color:#3fb950;font-size:11px;cursor:pointer}
 .out-item span{color:#8b949e;font-size:10px}
 .yaml-preview{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:8px;font-size:10px;max-height:120px;overflow-y:auto;white-space:pre;font-family:Consolas,monospace;color:#7ee787}
+.debug-panel{background:#0d1117;border-top:1px solid #30363d;padding:4px 12px;font-size:9px;color:#484f58;max-height:100px;overflow-y:auto;white-space:pre-wrap;font-family:Consolas,monospace;flex-shrink:0}
+.debug-panel .dl-warn{color:#d29922}
+.debug-panel .dl-error{color:#f85149}
+.debug-panel .dl-info{color:#58a6ff}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99}
 .overlay.show{display:block}
 .popup{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-height:500px;background:#161b22;border:1px solid #30363d;border-radius:8px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.6);flex-direction:column}
@@ -85,6 +88,7 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
   <span id="save-badge" style="font-size:10px;background:#1a2f1a;color:#3fb950;padding:2px 8px;border-radius:8px;">已保存</span>
   <span style="flex:1"></span>
   <span style="color:#8b949e;font-size:10px;">ctrl+S 保存</span>
+  <button class="btn btn-sm" onclick="revertFromServer()" title="放弃当前所有修改并重新加载服务器数据">↶ 不保存</button>
   <button class="btn btn-primary btn-sm" onclick="save()">保存</button>
 </div>
 <div class="main">
@@ -114,11 +118,12 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
     <div class="slabel">Recipes.yml 预览</div>
     <div class="yaml-preview" id="yaml-preview"></div>
     <div style="margin-top:12px;display:flex;gap:6px;">
-      <button class="btn" style="flex:1" onclick="discard()">放弃</button>
+      <button class="btn" style="flex:1" onclick="revertItem()">↶ 放弃修改</button>
       <button class="btn btn-primary" style="flex:1" onclick="save()">保存</button>
     </div>
   </div>
 </div>
+<div class="debug-panel" id="debug-panel"></div>
 
 <div class="overlay" id="overlay" onclick="closePicker()"></div>
 <div class="popup" id="popup">
@@ -142,13 +147,28 @@ window.fetch = function(input, init) {
   return nativeFetch(input, init);
 };
 
+var DLOG = [];
+function dlog(tag, msg) {
+  var ts = new Date().toISOString().slice(11,23);
+  var entry = '[' + ts + '] [' + tag + '] ' + msg;
+  DLOG.push(entry);
+  if (DLOG.length > 200) DLOG.shift();
+  $id('debug-panel').innerHTML = DLOG.map(function(e){
+    var cls = e.indexOf('[WARN]') >= 0 ? 'dl-warn' : (e.indexOf('[ERR]') >= 0 ? 'dl-error' : 'dl-info');
+    return '<span class="' + cls + '">' + esc(e) + '</span>';
+  }).join('\n');
+  $id('debug-panel').scrollTop = $id('debug-panel').scrollHeight;
+}
+function dlogErr(tag, msg) { dlog(tag, '[ERR] ' + msg); }
+
 var MC = {
   colors: {0:'#000000',1:'#0000AA',2:'#00AA00',3:'#00AAAA',4:'#AA0000',5:'#AA00AA',6:'#FFAA00',7:'#AAAAAA',8:'#555555',9:'#5555FF',a:'#55FF55',b:'#55FFFF',c:'#FF5555',d:'#FF55FF',e:'#FFFF55',f:'#FFFFFF'},
+  _isColorChar: function(c) { return c === '\u00a7' || c === '&'; },
   parseToHtml: function(text) {
     if (!text) return '';
     var out = '', i = 0, style = '';
     while (i < text.length) {
-      if (text[i] === '&' && i + 1 < text.length) {
+      if (MC._isColorChar(text[i]) && i + 1 < text.length) {
         var code = text[i+1].toLowerCase();
         if (code === 'r') style = '';
         else if (code === 'l') style += 'font-weight:bold;';
@@ -164,7 +184,15 @@ var MC = {
     }
     return out;
   },
-  strip: function(text) { return (text||'').replace(/&[0-9a-fA-Fk-oK-OrR]/g,''); },
+  strip: function(text) {
+    if (!text) return '';
+    var out = '', i = 0;
+    while (i < text.length) {
+      if (MC._isColorChar(text[i]) && i + 1 < text.length) { i += 2; continue; }
+      out += text[i]; i++;
+    }
+    return out;
+  },
   escapeHtml: function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 };
 
@@ -172,28 +200,38 @@ var itemData = {}, recipeTypes = [], allItems = [], selectedItemId = null;
 var currentTypeKey = '', slots = [], outputItemId = '', outputItemName = '', amount = 1, processingTime = 0;
 var pickerTarget = 'slot', pickerSlotIdx = -1;
 var popupCache = [];
+var lastSavedSlot = '';
+var lastSavedOutput = '';
+var lastSavedAmount = 1;
+var lastSavedTime = 0;
 
 function $id(id) { return document.getElementById(id); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,'\\\''); }
 
 function loadAll() {
+  dlog('INIT', 'loadAll: fetching /api/recipes');
   fetch('/api/recipes').then(function(r){return r.json()}).then(function(json){
     itemData = json.items || {};
     recipeTypes = json.recipeTypes || [];
+    dlog('INIT', 'loaded ' + Object.keys(itemData).length + ' items, ' + recipeTypes.length + ' recipe types');
     allItems = [];
     Object.keys(itemData).forEach(function(k){
       allItems.push({id:k, name:itemData[k].name||k, rt:itemData[k].currentRecipeType||''});
     });
-    allItems.sort(function(a,b){return a.name.localeCompare(b.name)});
+    allItems.sort(function(a,b){return MC.strip(a.name).localeCompare(MC.strip(b.name))});
     renderItemList('');
-  }).catch(function(e){ showToast('加载失败: '+e.message,'error') });
+  }).catch(function(e){
+    dlogErr('INIT', 'loadAll failed: ' + e.message);
+    showToast('加载失败: '+e.message,'error');
+  });
 }
 
 function renderItemList(filter) {
   var q = (filter||'').toLowerCase(), h = '';
   allItems.forEach(function(it){
-    if (q && it.id.toLowerCase().indexOf(q)<0 && MC.strip(it.name).toLowerCase().indexOf(q)<0) return;
+    var stripName = MC.strip(it.name).toLowerCase();
+    if (q && it.id.toLowerCase().indexOf(q)<0 && stripName.indexOf(q)<0) return;
     var rtShort = it.rt ? it.rt.split(':').pop() : '';
     h+='<div class="item-row'+(selectedItemId===it.id?' active':'')+'" data-id="'+it.id+'" onclick="selectItem(\''+escKey(it.id)+'\')">'
       +'<span>'+MC.parseToHtml(it.name)+'</span><span class="rtag">'+rtShort+'</span></div>';
@@ -203,11 +241,30 @@ function renderItemList(filter) {
 
 function filterItems(v) { renderItemList(v); }
 
+function snapshotItem(d) {
+  var recipes = d.recipes || [];
+  if (recipes.length > 0) {
+    var r = recipes[0];
+    lastSavedSlot = (r.input||[]).join(',');
+    lastSavedOutput = r.output || d.id;
+    lastSavedAmount = r.outputAmount || 1;
+    lastSavedTime = r.processingTime || 0;
+  } else {
+    lastSavedSlot = (d.currentRecipe||[]).join(',');
+    lastSavedOutput = d.id;
+    lastSavedAmount = 1;
+    lastSavedTime = 0;
+  }
+}
+
 function selectItem(id) {
+  dlog('SELECT', 'selectItem: ' + id + ' (prev=' + selectedItemId + ')');
   selectedItemId = id;
   var d = itemData[id];
-  if (!d) return;
+  if (!d) { dlogErr('SELECT', 'item not found in itemData: ' + id); return; }
+  dlog('SELECT', 'item name=' + MC.strip(d.name) + ' rt=' + (d.currentRecipeType||'null') + ' recipes.length=' + (d.recipes ? d.recipes.length : 0));
   renderItemList($id('item-search').value);
+  snapshotItem(d);
 
   var recipes = d.recipes || [];
   if (recipes.length > 0) {
@@ -218,6 +275,7 @@ function selectItem(id) {
     outputItemName = resolveName(outputItemId);
     amount = r.outputAmount || 1;
     processingTime = r.processingTime || 0;
+    dlog('SELECT', 'loaded recipes[0]: type=' + currentTypeKey + ' input=' + (r.input||[]).join(',') + ' output=' + outputItemId + ' amt=' + amount + ' time=' + processingTime);
   } else {
     currentTypeKey = d.currentRecipeType || '';
     slots = (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
@@ -225,6 +283,7 @@ function selectItem(id) {
     outputItemName = d.name;
     amount = 1;
     processingTime = 0;
+    dlog('SELECT', 'using currentRecipe: type=' + currentTypeKey + ' input=' + (d.currentRecipe||[]).join(','));
   }
   if (slots.length === 0) slots = [null];
 
@@ -242,7 +301,7 @@ function resolveName(id) {
 }
 
 function resolveDisplayName(id) {
-  return MC.escapeHtml(resolveName(id));
+  return MC.escapeHtml(MC.strip(resolveName(id)));
 }
 
 function renderGrid() {
@@ -260,7 +319,7 @@ function renderGrid() {
   h += '<span>输入 ' + total + ' 格</span>';
   h += '<span class="ri-dots">|</span>';
   h += '<span>输出 1 格</span>';
-  if (info.hasTime) h += '<span class="ri-dots">|</span><span>耗时 ' + processingTime + ' tick</span>';
+  if (info.hasTime && processingTime > 0) h += '<span class="ri-dots">|</span><span>耗时 ' + processingTime + ' tick</span>';
   h += '</div>';
 
   h += '<div class="recipe-grid" style="grid-template-columns:repeat('+cols+', 56px);">';
@@ -304,6 +363,7 @@ function renderTypeList() {
 }
 
 function changeType(key) {
+  dlog('CHANGE', 'changeType: ' + currentTypeKey + ' -> ' + key);
   currentTypeKey = key;
   var info = getTypeInfo(key);
   while (slots.length < info.slots) slots.push(null);
@@ -316,6 +376,7 @@ function changeType(key) {
 function changeTime(val) {
   var t = parseInt(val) || 0;
   processingTime = Math.max(0, t);
+  dlog('CHANGE', 'changeTime: ' + processingTime + ' tick');
   renderGrid();
   updateYaml();
 }
@@ -324,12 +385,14 @@ function openSlotPicker(idx) {
   pickerTarget = 'slot'; pickerSlotIdx = idx;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
+  dlog('PICKER', 'openSlotPicker idx=' + idx);
 }
 
 function openPicker(target) {
   pickerTarget = target; pickerSlotIdx = -1;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
+  dlog('PICKER', 'openPicker target=' + target);
 }
 
 var popupTimer = null;
@@ -341,10 +404,14 @@ function doPopupSearch() {
 function loadPopupMaterials(q) {
   var body = $id('popup-body');
   body.innerHTML = '<div style="color:#8b949e;text-align:center;padding:16px;">搜索中...</div>';
-  fetch('/api/recipes/materials?q=' + encodeURIComponent(q||'')).then(function(r){return r.json()}).then(function(json){
+  var url = '/api/recipes/materials?q=' + encodeURIComponent(q||'');
+  dlog('API', 'GET ' + url);
+  fetch(url).then(function(r){return r.json()}).then(function(json){
     popupCache = json.results || [];
+    dlog('API', 'materials result count: ' + popupCache.length);
     renderPopupList();
-  }).catch(function(){
+  }).catch(function(e){
+    dlogErr('API', 'materials fetch failed: ' + e.message);
     body.innerHTML = '<div style="color:#f85149;text-align:center;padding:16px;">加载失败</div>';
   });
 }
@@ -362,6 +429,7 @@ function renderPopupList() {
 }
 
 function pickMaterial(id, name) {
+  dlog('PICKER', 'pickMaterial: ' + id + ' target=' + pickerTarget + ' slotIdx=' + pickerSlotIdx);
   if (pickerTarget === 'output') {
     outputItemId = id; outputItemName = name;
   } else if (pickerTarget === 'slot' && pickerSlotIdx >= 0) {
@@ -394,12 +462,45 @@ function updateYaml() {
   $id('yaml-preview').innerHTML = y;
 }
 
-function discard() {
-  if (selectedItemId) {
-    delete itemData[selectedItemId];
-    loadAll();
-    setTimeout(function(){ selectItem(selectedItemId); }, 300);
-  } else showToast('请先选择物品','info');
+function revertItem() {
+  if (!selectedItemId) { showToast('请先选择物品','info'); return; }
+  dlog('REVERT', 'reverting item ' + selectedItemId + ' from server');
+  var d = itemData[selectedItemId];
+  if (d) {
+    snapshotItem(d);
+    var recipes = d.recipes || [];
+    if (recipes.length > 0) {
+      var r = recipes[0];
+      currentTypeKey = r.type || d.currentRecipeType || '';
+      slots = (r.input||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+      outputItemId = r.output || d.id;
+      outputItemName = resolveName(outputItemId);
+      amount = r.outputAmount || 1;
+      processingTime = r.processingTime || 0;
+    } else {
+      currentTypeKey = d.currentRecipeType || '';
+      slots = (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+      outputItemId = d.id;
+      outputItemName = d.name;
+      amount = 1;
+      processingTime = 0;
+    }
+    if (slots.length === 0) slots = [null];
+    renderTypeList();
+    renderGrid();
+    updateYaml();
+    showToast('已放弃修改','success');
+  }
+}
+
+function revertFromServer() {
+  dlog('REVERT', 'revertFromServer: full reload from server');
+  selectedItemId = null;
+  $id('right-panel').style.display = 'none';
+  $id('center-empty').style.display = 'block';
+  $id('center-panel').innerHTML = '<div style="text-align:center;color:#484f58;padding-top:60px;">请选择左侧物品</div>';
+  loadAll();
+  showToast('已从服务器重新加载','success');
 }
 
 function save() {
@@ -412,8 +513,13 @@ function save() {
   var payload = {items:{}};
   payload.items[selectedItemId] = {recipes:[recipe]};
 
-  fetch('/api/recipes', {method:'PUT', body:JSON.stringify(payload)}).then(function(r){
-    if (!r.ok) throw new Error('HTTP '+r.status); return r.json();
+  dlog('SAVE', 'saving ' + selectedItemId + ': type=' + currentTypeKey + ' input=' + inputIds.join(',') + ' output=' + outputItemId + ' amt=' + amount + ' time=' + processingTime);
+  var body = JSON.stringify(payload);
+  dlog('SAVE', 'PUT /api/recipes body=' + body.substring(0, 200));
+
+  fetch('/api/recipes', {method:'PUT', body:body}).then(function(r){
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
   }).then(function(){
     itemData[selectedItemId] = {
       id: selectedItemId, name: outputItemName,
@@ -421,10 +527,19 @@ function save() {
       currentRecipe: inputIds.slice(),
       recipes: [recipe]
     };
+    for (var i = 0; i < allItems.length; i++) {
+      if (allItems[i].id === selectedItemId) {
+        allItems[i].rt = currentTypeKey;
+        allItems[i].name = outputItemName;
+        break;
+      }
+    }
     bag.textContent = '已保存 · 实时生效'; bag.style.background='#1a2f1a'; bag.style.color='#3fb950';
+    dlog('SAVE', 'save success, itemData + allItems updated');
     showToast('合成表已更新 · 实时生效','success');
   }).catch(function(e){
     bag.textContent = '保存失败'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
+    dlogErr('SAVE', 'save failed: ' + e.message);
     showToast('保存失败: '+e.message,'error');
   });
 }

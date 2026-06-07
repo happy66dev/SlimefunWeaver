@@ -153,6 +153,7 @@ public class RecipeApiHandler implements HttpHandler {
                 if (p.startsWith("q=")) q = URLDecoder.decode(p.substring(2), "UTF-8").toLowerCase(Locale.ROOT).trim();
             }
         }
+        if (plugin.isDebugEnabled()) plugin.getLogger().info("[RecipeAPI] materials search q=" + q);
         StringBuilder sb = new StringBuilder("{\"results\":[");
         boolean first = true;
         int count = 0;

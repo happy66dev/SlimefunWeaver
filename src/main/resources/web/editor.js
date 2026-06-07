@@ -304,10 +304,6 @@ function getMaxPage() {
 
 function gridEnterCategory(cat) {
   if (!cat.key) return;
-  if (!cat.children || cat.children.length === 0) {
-    Toast.show('该分类无子分类', 'info');
-    return;
-  }
   state.navStack.push(state.selectedCategory);
   state.selectedCategory = cat;
   state.selectedNode = cat;
@@ -340,7 +336,7 @@ function renderGrid() {
   $('grid-title').textContent = isRoot ? '根级别' : '';
   if (!isRoot) $('grid-title').innerHTML = MC.parseToHtml(state.selectedCategory.display || state.selectedCategory.key || '未命名分类');
   $('grid-page-controls').style.display = 'flex';
-  $('btn-grid-back').style.display = state.navStack.length > 0 ? '' : 'none';
+  $('btn-grid-back').disabled = state.navStack.length === 0;
 
   var maxPage = getMaxPage();
   state.currentPage = Math.min(state.currentPage, Math.max(1, maxPage));
@@ -375,8 +371,7 @@ function renderGrid() {
 
       cell.onclick = (function(it, iIndex) { return function(e) {
         e.stopPropagation();
-        if (isRoot && it.key) { selectCategory(it, iIndex, null); }
-        else selectGridItem(it, iIndex);
+        selectGridItem(it, iIndex);
       }; })(item, idx);
 
       var isCat = item.icon || item.type === 'CATEGORY' || item.key;

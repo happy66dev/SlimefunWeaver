@@ -264,10 +264,10 @@ function handleCategoryClick(cat, index, parentRef) {
   } else {
     if (dblClickTimer) clearTimeout(dblClickTimer);
     dblClickTarget = cat;
+    selectCategory(cat, index, parentRef);
     dblClickTimer = setTimeout(function() {
       dblClickTimer = null;
       dblClickTarget = null;
-      selectCategory(cat, index, parentRef);
     }, 500);
   }
 }

@@ -181,12 +181,12 @@ async function discardChanges() {
   });
 }
 
-function resolveTreeRoot() {
-  if (!state.treeRootIndex || state.treeRootIndex.length === 0) return null;
+function resolveNavPath(indexPath) {
+  if (!indexPath || indexPath.length === 0) return null;
   var cats = state.categories;
   var found = null;
-  for (var i = 0; i < state.treeRootIndex.length; i++) {
-    var idx = state.treeRootIndex[i];
+  for (var i = 0; i < indexPath.length; i++) {
+    var idx = indexPath[i];
     if (idx < 0 || idx >= cats.length) return null;
     found = cats[idx];
     cats = [];
@@ -203,28 +203,12 @@ function renderTree() {
   var root = $('tree-root');
   root.innerHTML = '';
 
-  var treeRoot = resolveTreeRoot();
-
-  if (treeRoot) {
+  if (state.treeRootIndex.length > 0) {
     var backLi = document.createElement('li');
     backLi.className = 'tree-root-entry';
-    var parentDisplay = '';
-    if (state.treeRootIndex.length === 1) {
-      parentDisplay = '[根级别]';
-    } else {
-      var parentCats = state.categories;
-      for (var pi = 0; pi < state.treeRootIndex.length - 1; pi++) {
-        var pidx = state.treeRootIndex[pi];
-        if (pidx >= 0 && pidx < parentCats.length) {
-          var pc = parentCats[pidx];
-          parentCats = [];
-          if (pc.children) for (var pj = 0; pj < pc.children.length; pj++) { if (pc.children[pj].key) parentCats.push(pc.children[pj]); }
-        }
-      }
-      var pidx = state.treeRootIndex[state.treeRootIndex.length - 1];
-      var immediateParent = (pidx >= 0 && pidx < parentCats.length) ? parentCats[pidx] : null;
-      parentDisplay = immediateParent ? (immediateParent.display || immediateParent.key) : '?';
-    }
+    var parentPath = state.treeRootIndex.slice(0, -1);
+    var parentCat = resolveNavPath(parentPath);
+    var parentDisplay = parentCat ? (parentCat.display || parentCat.key) : '[根级别]';
     backLi.innerHTML = '<span class="tree-icon">\u21a9</span><span class="tree-label tree-root-label">↶ 返回 ' + MC.escapeHtml(MC.strip(parentDisplay)) + '</span>';
     backLi.onclick = function(e) { e.stopPropagation(); goBackTree(); };
     root.appendChild(backLi);
@@ -237,32 +221,22 @@ function renderTree() {
     root.appendChild(rootLi);
   }
 
-  var displayCats;
-  if (treeRoot) {
-    displayCats = treeRoot.children || [];
-  } else {
-    displayCats = state.categories || [];
-  }
-  var depth = treeRoot ? 0 : 0;
-  displayCats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, depth)); });
+  var cats = state.categories || [];
+  cats.forEach(function(cat, i) { root.appendChild(buildTreeItem(cat, i, null, 0)); });
   applyTreeFilter();
 }
 
 function goBackTree() {
   state.treeRootIndex.pop();
-  if (state.treeRootIndex.length === 0) {
+  var prevCat = resolveNavPath(state.treeRootIndex);
+  if (prevCat) {
+    state.selectedCategory = prevCat;
+    state.selectedNode = prevCat;
+  } else {
     state.selectedCategory = null;
     state.selectedNode = null;
-  } else {
-    var backRoot = resolveTreeRoot();
-    if (backRoot) {
-      state.selectedCategory = backRoot;
-      state.selectedNode = backRoot;
-    }
   }
-  if (state.selectedNode === null && state.selectedCategory === null) {
-    state.currentPage = 1;
-  }
+  state.currentPage = 1;
   renderTree();
   renderGrid();
   renderEditor();
@@ -276,6 +250,26 @@ function selectRoot() {
   renderTree();
   renderGrid();
   renderEditor();
+}
+
+var dblClickTimer = null;
+var dblClickTarget = null;
+
+function handleCategoryClick(cat, index, parentRef) {
+  if (dblClickTimer && dblClickTarget === cat) {
+    clearTimeout(dblClickTimer);
+    dblClickTimer = null;
+    dblClickTarget = null;
+    enterCategory(cat, index, parentRef);
+  } else {
+    if (dblClickTimer) clearTimeout(dblClickTimer);
+    dblClickTarget = cat;
+    dblClickTimer = setTimeout(function() {
+      dblClickTimer = null;
+      dblClickTarget = null;
+      selectCategory(cat, index, parentRef);
+    }, 500);
+  }
 }
 
 function filterTree() {
@@ -318,8 +312,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var icon = '\u25b8';
   li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.strip(cat.display||cat.key) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
-  li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
-  li.ondblclick = function(e) { e.stopPropagation(); enterCategory(cat, index, parentRef); };
+  li.onclick = function(e) { e.stopPropagation(); handleCategoryClick(cat, index, parentRef); };
   if (state.selectedNode === cat) li.classList.add('active');
 
   var ul = null;
@@ -358,23 +351,32 @@ function selectCategory(cat, index, parentRef) {
 
 function enterCategory(cat, index, parentRef) {
   if (!cat.children || cat.children.length === 0) return;
-  var parentCats = [];
-  if (parentRef === null) {
-    parentCats = state.categories;
-  } else if (parentRef.children) {
-    for (var i = 0; i < parentRef.children.length; i++) { if (parentRef.children[i].key) parentCats.push(parentRef.children[i]); }
-  }
-  var catIdx = parentCats.indexOf(cat);
-  if (catIdx < 0) {
-    catIdx = index;
-  }
-  state.treeRootIndex.push(catIdx);
+  var fullPath = findPathToCategory(cat);
+  if (fullPath === null) return;
+  state.treeRootIndex = fullPath;
   state.selectedNode = cat;
   state.selectedCategory = cat;
   state.currentPage = 1;
   renderTree();
   renderGrid();
   renderEditor();
+}
+
+function findPathToCategory(target) {
+  var path = [];
+  function walk(cats) {
+    for (var i = 0; i < cats.length; i++) {
+      if (cats[i] === target) { path.push(i); return true; }
+      if (cats[i].children && cats[i].children.length > 0) {
+        path.push(i);
+        if (walk(cats[i].children)) return true;
+        path.pop();
+      }
+    }
+    return false;
+  }
+  if (walk(state.categories)) return path;
+  return null;
 }
 
 function getChildren() {

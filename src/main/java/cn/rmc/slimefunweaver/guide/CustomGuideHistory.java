@@ -82,6 +82,10 @@ public class CustomGuideHistory {
         }
     }
 
+    public void pushForce(CustomCategory category, int page) {
+        stack.addLast(new CategoryEntry(category, page));
+    }
+
     public void pushItem(String slimefunId) {
         stack.addLast(new ItemEntry(slimefunId));
     }

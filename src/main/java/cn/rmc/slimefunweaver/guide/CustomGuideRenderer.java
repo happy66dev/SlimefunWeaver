@@ -208,7 +208,7 @@ public class CustomGuideRenderer {
                     CustomCategory target = findCategoryByKey(plugin.getRootCategories(), ref.getTargetCategoryKey());
                     if (target != null) {
                         SlimefunWeaver.debug(pl, "REFERENCE click: " + ref.getTargetCategoryKey() + " from page " + page);
-                        history.push(category, page);
+                        history.pushForce(category, page);
                         openMenu(pl, history, mode, target, 1);
                     }
                     return false;

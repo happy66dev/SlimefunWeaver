@@ -639,7 +639,7 @@ public class RecipeApiHandler implements HttpHandler {
         ConfigurationSection root = storedRecipes.getConfigurationSection("slimefun");
         if (root == null) return;
 
-        Map<String, RecipeType> resolved = resolveBuiltinTypes();
+        Map<String, RecipeType> resolved = collectRuntimeRecipeTypes(resolveBuiltinTypes());
 
         for (String itemId : root.getKeys(false)) {
             SlimefunItem item = IconParser.findSlimefunItem(itemId);

@@ -202,7 +202,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div id="editor-form" style="display:none">
     <div class="form-group"><label>研究ID</label><input type="text" id="edit-key" disabled/><span id="edit-namespaced" style="font-size:10px;color:#484f58;margin-top:2px;display:inline-block"></span></div>
     <div class="form-group"><label>本地化译名</label><input type="text" id="edit-locname" disabled/><div id="loc-preview" style="margin-top:5px;padding:6px;background:#0d1117;border-radius:4px;border:1px solid #30363d;font-size:11px;min-height:20px"></div><div style="font-size:9px;color:#d29922;margin-top:3px">当前仅预览，暂不写入语言文件</div></div>
-    <div class="form-row"><div class="form-group"><label>经验</label><input type="number" id="edit-levelcost" min="0"/></div><div class="form-group"><label>金钱</label><input type="number" id="edit-moneycost" min="0" step="0.01"/></div></div>
+    <div class="form-row"><div class="form-group"><label>经验</label><input type="number" id="edit-levelcost" min="0" oninput="onCostChange()"/></div><div class="form-group"><label>金钱</label><input type="number" id="edit-moneycost" min="0" step="0.01" oninput="onCostChange()"/></div></div>
     <div class="form-group"><label>AuraSkills</label><div class="skill-grid" id="skill-grid"></div></div>
     <div class="form-group"><label>启用</label><div class="tgl-wrap"><label class="tgl"><input type="checkbox" id="edit-enabled" checked onchange="onEnabledToggle()"/><span class="tgl-slider"></span></label><span id="enabled-label" style="font-size:11px">已启用</span></div></div>
     <div class="form-group"><label>前置依赖</label><div class="dep-section"><div class="dep-hdr">前置 (<span id="parents-count">0</span>)</div><div id="parents-list"></div></div></div>
@@ -259,7 +259,7 @@ function apiToInternal(apiJson) {
   itemToResearch = apiJson.itemToResearch || {};
   var list = (apiJson.researches || []).map(function(r) {
     var fullKey = r.fullKey || ((r.namespace || 'slimefun') + ':' + r.key);
-    return {key: fullKey, shortKey: r.key, fullKey: fullKey, namespace: r.namespace, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: r.items || [], parents: r.parents || [], descendants: [], skills: {mining: r.miningLevelNeed || 0, farming: r.farmingLevelNeed || 0, foraging: r.foragingLevelNeed || 0, fishing: r.fishingLevelNeed || 0, excavation: r.excavationLevelNeed || 0, archery: r.archeryLevelNeed || 0, defense: r.defenseLevelNeed || 0, fighting: r.fightingLevelNeed || 0, agility: r.agilityLevelNeed || 0, enchanting: r.enchantingLevelNeed || 0, alchemy: r.alchemyLevelNeed || 0}, x: 0, y: 0};
+    return {key: fullKey, shortKey: r.key, fullKey: fullKey, namespace: r.namespace, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: r.items || [], parents: r.parents || [], needUnlockedItems: r.needUnlockedItems || [], descendants: [], skills: {mining: r.miningLevelNeed || 0, farming: r.farmingLevelNeed || 0, foraging: r.foragingLevelNeed || 0, fishing: r.fishingLevelNeed || 0, excavation: r.excavationLevelNeed || 0, archery: r.archeryLevelNeed || 0, defense: r.defenseLevelNeed || 0, fighting: r.fightingLevelNeed || 0, agility: r.agilityLevelNeed || 0, enchanting: r.enchantingLevelNeed || 0, alchemy: r.alchemyLevelNeed || 0}, x: 0, y: 0};
   });
   list.forEach(function(r) { r.parents.forEach(function(pk) { var pr = list.find(function(rr) { return rr.key === pk; }); if (pr && pr.descendants.indexOf(r.key) < 0) pr.descendants.push(r.key); }); });
   return list;
@@ -269,13 +269,11 @@ function loadResearches() {
 }
 function saveResearches() {
   var payload = {researches: researches.map(function(r) {
-    var needItems = r.parents.map(function(pk) {
-      var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) return pr.items[0].id;
-      return null;
-    }).filter(Boolean);
+    var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
+    r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) needItems.push(pr.items[0].id); } });
     return {fullKey: r.fullKey || r.key, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
-  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { unsaved = {newResearches: new Set(), newDeps: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
+  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});r.needUnlockedItems = saved ? saved.needUnlockedItems : (r.needUnlockedItems || [])}); unsaved = {newResearches: new Set(), newDeps: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
 }
 function discardChanges(){
   if(!confirm('确定放弃所有未保存的修改？'))return;
@@ -343,6 +341,7 @@ function renderRightPanel(){
   updateLocPreview();renderSkills();renderDeps();renderYamlPreview();
 }
 function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';renderGraph()}
+function onCostChange(){if(!selectedResearch)return;selectedResearch.levelCost=parseInt(document.getElementById('edit-levelcost').value)||0;selectedResearch.moneyCost=parseFloat(document.getElementById('edit-moneycost').value)||0;renderYamlPreview();buildResearchList(document.getElementById('research-search').value)}
 function updateLocPreview(){var v=document.getElementById('edit-locname').value;document.getElementById('loc-preview').innerHTML='预览: '+(v?MC.parseToHtml(v):'<span style="color:#484f58">空</span>')}
 var skillsDef=[{icon:'⛏',key:'mining',label:'采掘'},{icon:'🌾',key:'farming',label:'农耕'},{icon:'🪓',key:'foraging',label:'采伐'},{icon:'🎣',key:'fishing',label:'钓鱼'},{icon:'🏹',key:'archery',label:'弓箭'},{icon:'🛡',key:'defense',label:'防御'},{icon:'⚔',key:'fighting',label:'战斗'},{icon:'💨',key:'agility',label:'敏捷'},{icon:'✨',key:'enchanting',label:'附魔'},{icon:'🧪',key:'alchemy',label:'炼金'},{icon:'🔨',key:'excavation',label:'挖掘'}];
 function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" data-sk="'+sk.key+'" onchange="onSkillChange(this)"/></div>'});g.innerHTML=h}

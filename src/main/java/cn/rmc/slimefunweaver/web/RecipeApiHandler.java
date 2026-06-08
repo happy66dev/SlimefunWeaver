@@ -358,10 +358,10 @@ public class RecipeApiHandler implements HttpHandler {
         return sb.toString();
     }
 
-    private String recipeToJson(Map<?, ?> r, String fallbackId) {
+    private static String recipeToJson(Map<?, ?> r, String fallbackId) {
         String type = String.valueOf(r.get("type"));
         List<?> inputList = (List<?>) r.get("input");
-        String output = String.valueOf(r.get("output"));
+        String output = r.get("output") != null ? String.valueOf(r.get("output")) : fallbackId;
         int amount = toInt(r.get("output-amount"), 1);
         int time = toInt(r.get("processing-time"), 0);
         StringBuilder sb = new StringBuilder();
@@ -460,10 +460,12 @@ public class RecipeApiHandler implements HttpHandler {
             return false;
         }
 
+        YamlConfiguration previousRecipes = storedRecipes;
         storedRecipes = yaml;
         try {
             runSync(RecipeApiHandler::applyAllRecipes);
         } catch (Exception e) {
+            storedRecipes = previousRecipes;
             plugin.getLogger().log(Level.WARNING, "Failed to apply Recipes.yml", e);
             return false;
         }

@@ -2,6 +2,8 @@ package cn.rmc.slimefunweaver.web;
 
 import org.junit.Test;
 
+import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,5 +38,18 @@ public class RecipeApiJsonTest {
 
         assertTrue(parsed.containsKey("TEST_ITEM"));
         assertTrue(parsed.get("TEST_ITEM").isEmpty());
+    }
+
+    @Test
+    public void recipeJsonUsesFallbackOutputWhenStoredOutputMissing() throws Exception {
+        Map<String, Object> recipe = new LinkedHashMap<>();
+        recipe.put("type", "slimefun:enhanced_crafting_table");
+        recipe.put("input", java.util.Arrays.asList("IRON_INGOT"));
+
+        Method method = RecipeApiHandler.class.getDeclaredMethod("recipeToJson", Map.class, String.class);
+        method.setAccessible(true);
+        String json = (String) method.invoke(null, recipe, "TEST_ITEM");
+
+        assertTrue(json.contains("\"output\":\"TEST_ITEM\""));
     }
 }

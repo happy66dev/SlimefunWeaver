@@ -37,7 +37,7 @@ var MC = {
             continue;
           }
         }
-        if (code && '0123456789abcdefABCDEFklmno'.indexOf(code) >= 0) {
+        if (code && '0123456789abcdefABCDEFrklmno'.indexOf(code) >= 0) {
           code = code.toLowerCase();
           if (code === 'r') style = '';
           else if (code === 'l') style += 'font-weight:bold;';
@@ -68,13 +68,16 @@ var MC = {
         }
         if (validHex) { i += 14; continue; }
       }
-      if ((text[i] === '\u00a7' || text[i] === '&') && '0123456789abcdefABCDEFklmno'.indexOf(text[i+1]) >= 0) { i += 2; continue; }
+      if ((text[i] === '\u00a7' || text[i] === '&') && '0123456789abcdefABCDEFrklmno'.indexOf(text[i+1]) >= 0) { i += 2; continue; }
       out += text[i]; i++;
     }
     return out;
   },
   escapeHtml: function(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  },
+  escapeAttr: function(s) {
+    return MC.escapeHtml(String(s || '')).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 };
 
@@ -249,7 +252,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
   var totalChildren = (cat.children ? cat.children.length : 0) + (cat.items ? cat.items.length : 0);
 
   var icon = '\u25b8';
-  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.escapeHtml(MC.strip(cat.display||cat.key)) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
+  li.innerHTML = '<span class="tree-icon">' + icon + '</span><span class="tree-label tree-category" title="' + MC.escapeAttr(MC.strip(cat.display||cat.key)) + '">' + MC.parseToHtml(cat.display||cat.key) + '</span>' + (totalChildren > 0 ? '<span class="tree-badge">' + totalChildren + '</span>' : '');
 
   li.onclick = function(e) { e.stopPropagation(); selectCategory(cat, index, parentRef); };
   if (state.selectedNode === cat) li.classList.add('active');
@@ -269,7 +272,7 @@ function buildTreeItem(cat, index, parentRef, depth) {
       var itLabel = it.display || it.id || it.key || '?';
       if (itType === 'PLACEHOLDER') itLabel = it.display || '(占位)';
       if (itType === 'REFERENCE') itLabel = it.display || '\u21b3 ' + (it.ref || '?');
-      itemLi.innerHTML = '<span class="tree-icon" style="opacity:0.7">' + itIcon + '</span><span class="tree-label tree-item" title="' + MC.escapeHtml(MC.strip(itLabel)) + '">' + MC.parseToHtml(itLabel) + '</span>';
+      itemLi.innerHTML = '<span class="tree-icon" style="opacity:0.7">' + itIcon + '</span><span class="tree-label tree-item" title="' + MC.escapeAttr(MC.strip(itLabel)) + '">' + MC.parseToHtml(itLabel) + '</span>';
       itemLi.onclick = function(e) { e.stopPropagation(); selectGridItem(it, ii); };
       if (state.selectedNode === it) itemLi.classList.add('active');
       ul.appendChild(itemLi);

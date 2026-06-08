@@ -353,6 +353,8 @@ public class WebApiHandler implements HttpHandler {
                 } else {
                     Map<String, Object> itemMap = new LinkedHashMap<>();
                     itemMap.put("id", itemObj.has("id") ? itemObj.get("id").getAsString() : "UNKNOWN");
+                    if (itemObj.has("display") && !itemObj.get("display").isJsonNull())
+                        itemMap.put("display", itemObj.get("display").getAsString());
                     if (itemObj.has("page")) itemMap.put("page", itemObj.get("page").getAsInt());
                     if (itemObj.has("slot")) itemMap.put("slot", itemObj.get("slot").getAsInt());
                     itemList.add(itemMap);

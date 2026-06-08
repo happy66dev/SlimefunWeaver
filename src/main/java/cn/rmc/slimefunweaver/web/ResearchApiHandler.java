@@ -122,7 +122,7 @@ public class ResearchApiHandler implements HttpHandler {
         if (query != null) {
             for (String param : query.split("&")) {
                 if (param.startsWith("q=")) {
-                    try { q = java.net.URLDecoder.decode(param.substring(2), "UTF-8").toLowerCase(); } catch (Exception ignored) {}
+                    try { q = java.net.URLDecoder.decode(param.substring(2), "UTF-8").toLowerCase(); } catch (Exception e) { plugin.getLogger().log(Level.WARNING, "URL decode failed for query: " + param, e); }
                 }
             }
         }
@@ -153,7 +153,6 @@ public class ResearchApiHandler implements HttpHandler {
     private String buildResearchesJson() {
         Map<String, String> itemToResearch = new LinkedHashMap<>();
         for (Research r : Slimefun.getRegistry().getResearches()) {
-            if (!r.isEnabled()) continue;
             List<SlimefunItem> affectedItems = r.getAffectedItems();
             if (affectedItems == null) continue;
             for (SlimefunItem item : affectedItems) itemToResearch.put(item.getId(), r.getKey().toString());
@@ -264,7 +263,7 @@ public class ResearchApiHandler implements HttpHandler {
 
     private static String extractJsonString(String json, String key) {
         String s = "\"" + key + "\":\""; int idx = json.indexOf(s);
-        if (idx < 0) { s = "\"" + key + "\":null"; idx = json.indexOf(s); return idx >= 0 ? null : null; }
+        if (idx < 0) return null;
         int start = idx + s.length(); StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
             char ch = json.charAt(i);
@@ -287,8 +286,8 @@ public class ResearchApiHandler implements HttpHandler {
 
     private static Boolean extractJsonBoolean(String json, String key) {
         String s = "\"" + key + "\":"; int idx = json.indexOf(s); if (idx < 0) return null;
-        idx += s.length(); if (json.regionMatches(idx, "true", 0, 4)) return true;
-        if (json.regionMatches(idx, "false", 0, 5)) return false; return null;
+        idx += s.length(); if (idx + 4 <= json.length() && json.regionMatches(idx, "true", 0, 4)) return true;
+        if (idx + 5 <= json.length() && json.regionMatches(idx, "false", 0, 5)) return false; return null;
     }
 
     private static List<String> extractJsonStringArray(String json, String key) {
@@ -300,7 +299,12 @@ public class ResearchApiHandler implements HttpHandler {
                 while (i < json.length()) {
                     if (json.charAt(i) == '\\' && i + 1 < json.length()) {
                         char nx = json.charAt(i + 1);
-                        if (nx == '"') { sb.append('"'); i++; } else if (nx == '\\') { sb.append('\\'); i++; } else if (nx == 'n') { sb.append('\n'); i++; } else sb.append(json.charAt(i));
+                        if (nx == '"') { sb.append('"'); i++; }
+                        else if (nx == '\\') { sb.append('\\'); i++; }
+                        else if (nx == 'n') { sb.append('\n'); i++; }
+                        else if (nx == 'r') { sb.append('\r'); i++; }
+                        else if (nx == 't') { sb.append('\t'); i++; }
+                        else sb.append(json.charAt(i));
                     } else if (json.charAt(i) == '"') break; else sb.append(json.charAt(i));
                     i++;
                 }

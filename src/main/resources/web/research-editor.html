@@ -163,7 +163,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <span class="stat-ok">依赖 <strong id="stat-deps">-</strong></span>
   </div>
   <div class="toolbar-actions">
-    <button class="btn btn-sm" onclick="alert('预览')">↶ 放弃修改</button>
+    <button class="btn btn-sm" onclick="discardChanges()">↶ 放弃修改</button>
     <button class="btn btn-sm btn-primary" onclick="saveResearches()">💾 保存</button>
   </div>
 </div>
@@ -177,7 +177,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div id="center-top">
     <div id="ct-section-header">
       <span id="ct-section-title">📦 请选择左侧研究</span>
-      <button class="btn btn-xs" onclick="alert('预览')">+ 添加物品</button>
+      <button class="btn btn-xs" id="btn-add-item" onclick="showItemPicker()">+ 添加物品</button>
     </div>
     <div id="items-grid-wrapper"><div id="items-grid"></div><div id="ct-empty" style="display:flex">← 选择左侧研究</div></div>
   </div>
@@ -215,6 +215,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="arrow-delete-bar"><span id="arrow-info"></span><button class="btn btn-xs btn-danger" onclick="deleteSelectedArrow()">🗑 删除</button><button class="btn btn-xs" onclick="deselectArrow()">✕</button></div>
 <div class="color-picker-popup" id="color-picker"></div>
 <div id="toast"></div>
+<div class="color-picker-popup" id="item-picker-popup" style="width:340px;max-height:360px;overflow-y:auto">
+  <div style="font-size:11px;font-weight:600;color:#e94560;margin-bottom:6px">🔍 添加物品到研究</div>
+  <input type="text" id="item-picker-search" placeholder="搜索物品ID或名称..." style="width:100%;padding:5px 8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:11px;margin-bottom:6px" oninput="searchItems()" onkeydown="if(event.key==='Escape')hideItemPicker()"/>
+  <div id="item-picker-results" style="font-size:10px;max-height:260px;overflow-y:auto"></div>
+  <button class="btn btn-xs" style="margin-top:6px;width:100%" onclick="hideItemPicker()">✕ 关闭</button>
+</div>
 <script>
 var API_TOKEN = sessionStorage.getItem('scg_token') || '';
 if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
@@ -240,14 +246,14 @@ var MC={
         if('0123456789abcdefABCDEFklmnor'.indexOf(c)>=0){c=c.toLowerCase();if(c==='r')s='';else if(c==='l')s+='font-weight:bold;';else if(c==='m')s+='text-decoration:line-through;';else if(c==='n')s+='text-decoration:underline;';else if(c==='o')s+='font-style:italic;';else if(MC.colors[c])s+='color:'+MC.colors[c]+';';i+=2;continue}}o+='<span style="'+s+'">'+MC.escapeHtml(t[i])+'</span>';i++}return o},
   escapeHtml:function(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 };
-function Z(){return{mining:0,farming:0,foraging:0,fishing:0,archery:0,defense:0,fighting:0,agility:0,enchanting:0,alchemy:0,excavation:0}}
 
 
 // ============ DATA: loaded from API ============
 var researches = [];
 var itemToResearch = {};
-function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/\x27/g,"\\\x27"); }
+function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function stripNS(fk) { var p = fk.split(":"); return p.length > 1 ? p.slice(1).join(":") : p[0]; }
+function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r')}
 function apiToInternal(apiJson) {
   itemToResearch = apiJson.itemToResearch || {};
   var list = (apiJson.researches || []).map(function(r) {
@@ -268,16 +274,29 @@ function saveResearches() {
     }).filter(Boolean);
     return {fullKey: r.fullKey || (r.namespace + ":" + r.key), levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
-  return fetch("/api/researches", {method: "PUT", body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { unsaved = {newResearches: new Set(), newDeps: new Set(), newItems: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
+  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { unsaved = {newResearches: new Set(), newDeps: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
 }
-var unsaved = {newResearches: new Set(), newDeps: new Set(), newItems: new Set()};
+function discardChanges(){
+  if(!confirm('确定放弃所有未保存的修改？'))return;
+  loadResearches().then(function(){
+    unsaved={newResearches:new Set(),newDeps:new Set()};
+    selectedResearch=null;
+    buildResearchList('');
+    renderCenterTop();renderRightPanel();
+    autoLayout();
+    showToast('已放弃修改','info');
+  }).catch(function(e){
+    showToast('放弃修改失败: ' + e.message, 'error');
+  });
+}
+var unsaved = {newResearches: new Set(), newDeps: new Set()};
 var selectedResearch = null, selectedArrow = null, graphScale = 1, graphOffsetX = 0, graphOffsetY = 0, isPanning = false, panStartX = 0, panStartY = 0;
 var dragConnect = {active: false, fromKey: null, fromPortX: 0, fromPortY: 0};
 
 function buildResearchList(filter){
   var list=document.getElementById('research-list'),h='';
   researches.forEach(function(r){
-    if(filter){var f=filter.toLowerCase(),mk=r.key.toLowerCase().indexOf(f)>=0,mn=r.name.indexOf(f)>=0,mi=r.items.some(function(it){return it.id.toLowerCase().indexOf(f)>=0||it.name.indexOf(f)>=0});if(!mk&&!mn&&!mi)return}
+    if(filter){var f=filter.toLowerCase(),mk=r.key.toLowerCase().indexOf(f)>=0,mn=r.name.toLowerCase().indexOf(f)>=0,mi=r.items.some(function(it){return it.id.toLowerCase().indexOf(f)>=0||it.name.toLowerCase().indexOf(f)>=0});if(!mk&&!mn&&!mi)return}
     var isNew=unsaved.newResearches.has(r.key);
     var tags='',ms=4;
     if(r.items.length>ms){tags=r.items.slice(0,ms).map(function(it){return'<span class="r-tag">'+MC.escapeHtml(it.name)+'</span>'}).join('')+'<span class="r-tag">+'+ (r.items.length-ms)+'</span>'}
@@ -325,14 +344,69 @@ function renderRightPanel(){
 function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';renderGraph()}
 function updateLocPreview(){var v=document.getElementById('edit-locname').value;document.getElementById('loc-preview').innerHTML='预览: '+(v?MC.parseToHtml(v):'<span style="color:#484f58">空</span>')}
 var skillsDef=[{icon:'⛏',key:'mining',label:'采掘'},{icon:'🌾',key:'farming',label:'农耕'},{icon:'🪓',key:'foraging',label:'采伐'},{icon:'🎣',key:'fishing',label:'钓鱼'},{icon:'🏹',key:'archery',label:'弓箭'},{icon:'🛡',key:'defense',label:'防御'},{icon:'⚔',key:'fighting',label:'战斗'},{icon:'💨',key:'agility',label:'敏捷'},{icon:'✨',key:'enchanting',label:'附魔'},{icon:'🧪',key:'alchemy',label:'炼金'},{icon:'🔨',key:'excavation',label:'挖掘'}];
-function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" onchange="alert(\'预览\')"/></div>'});g.innerHTML=h}
+function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" data-sk="'+sk.key+'" onchange="onSkillChange(this)"/></div>'});g.innerHTML=h}
+function onSkillChange(input){if(!selectedResearch)return;selectedResearch.skills[input.getAttribute('data-sk')]=parseInt(input.value)||0;renderGraph();showToast('技能已更新','info')}
 function renderDeps(){
-  document.getElementById('parents-count').textContent=selectedResearch.parents.length;
-  var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="alert(\'预览\')">&times;</span></div>'});
-  document.getElementById('parents-list').innerHTML=ph||'<div style="font-size:10px;color:#484f58;">无</div>';
-  var ch='';selectedResearch.descendants.forEach(function(dk){var d=researches.find(function(r){return r.key===dk});ch+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(d?d.name:dk)+' ('+MC.escapeHtml(dk)+')</span><span style="color:#484f58;font-size:9px">→ 需本项</span></div>'});
-  document.getElementById('children-list').innerHTML=ch||'<div style="font-size:10px;color:#484f58;">无</div>';
-}
+    document.getElementById('parents-count').textContent=selectedResearch.parents.length;
+    var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="event.stopPropagation();removeParentDependency(\''+escapeKey(pk)+'\')">&times;</span></div>'});
+    document.getElementById('parents-list').innerHTML=ph||'<div style="font-size:10px;color:#484f58;">无</div>';
+    var ch='';selectedResearch.descendants.forEach(function(dk){var d=researches.find(function(r){return r.key===dk});ch+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(d?d.name:dk)+' ('+MC.escapeHtml(dk)+')</span><span style="color:#484f58;font-size:9px">→ 需本项</span></div>'});
+    document.getElementById('children-list').innerHTML=ch||'<div style="font-size:10px;color:#484f58;">无</div>';
+  }
+  function removeParentDependency(pk){
+    if(!selectedResearch)return;
+    var pi=selectedResearch.parents.indexOf(pk);
+    if(pi>=0)selectedResearch.parents.splice(pi,1);
+    var parent=researches.find(function(r){return r.key===pk});
+    if(parent){var di=parent.descendants.indexOf(selectedResearch.key);if(di>=0)parent.descendants.splice(di,1)}
+    unsaved.newDeps.delete(pk+'\u2192'+selectedResearch.key);
+    renderRightPanel();autoLayout();renderGraph();
+    buildResearchList(document.getElementById('research-search').value);
+    showToast('已删除依赖','info');
+  }
+  function showItemPicker(){
+    var popup=document.getElementById('item-picker-popup');
+    var btn=document.getElementById('btn-add-item');
+    if(!btn)return;
+    var rect=btn.getBoundingClientRect();
+    popup.style.top=(rect.bottom+4)+'px';
+    popup.style.left=Math.min(rect.left,window.innerWidth-350)+'px';
+    popup.classList.add('show');
+    document.getElementById('item-picker-search').value='';
+    searchItems();
+  }
+  function hideItemPicker(){document.getElementById('item-picker-popup').classList.remove('show')}
+  var itemPickerTimer=null;
+  function searchItems(){
+    var q=document.getElementById('item-picker-search').value.trim();
+    clearTimeout(itemPickerTimer);
+    itemPickerTimer=setTimeout(function(){
+      fetch('/api/slimefun-items'+(q?'?q='+encodeURIComponent(q):'')).then(function(r){return r.json()}).then(function(json){
+        var results=document.getElementById('item-picker-results');
+        var items=(json.items||[]).slice(0,30);
+        if(items.length===0){results.innerHTML='<div style="color:#484f58;padding:8px">无匹配物品</div>';return}
+        var h='';
+        items.forEach(function(it){
+          var alreadyIn=selectedResearch&&selectedResearch.items.some(function(si){return si.id===it.id});
+          h+='<div style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+'" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
+            +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
+            +' <span style="color:#c9d1d9">'+MC.escapeHtml(it.name||'')+'</span>'
+            +(alreadyIn?' <span style="color:#3fb950;font-size:9px">✓已添加</span>':'')
+            +'</div>';
+        });
+        results.innerHTML=h;
+      }).catch(function(){document.getElementById('item-picker-results').innerHTML='<div style="color:#f85149;padding:8px">加载失败</div>'})
+    },250);
+  }
+  function addItemToResearch(id,name){
+    if(!selectedResearch)return;
+    if(selectedResearch.items.some(function(it){return it.id===id}))return;
+    selectedResearch.items.push({id:id,name:name});
+    renderCenterTop();renderGraph();
+    updateToolbarStats();
+    searchItems();
+    showToast('已添加: '+name,'success');
+  }
 function renderYamlPreview(){
   var r=selectedResearch,h=[];h.push('<span class="yaml-comment"># Researches.yml</span><span class="yaml-key">slimefun:</span>');
   h.push('  <span class="yaml-key">'+MC.escapeHtml(r.key)+':</span>');
@@ -353,7 +427,7 @@ function checkCP(){var input=document.getElementById('edit-locname'),popup=docum
 function onLocNameKey(e){if(e.key==='Escape')document.getElementById('color-picker').classList.remove('show')}
 function showCP(popup,input){var rect=input.getBoundingClientRect();popup.style.top=(rect.bottom+4)+'px';popup.style.left=rect.left+'px';var h='<div style="font-size:10px;color:#8b949e;margin-bottom:4px">颜色 (&→§):</div><div class="cp-grid">';'0123456789abcdef'.split('').forEach(function(c){var bg=MC.colors[c],fg='0489ac'.indexOf(c)>=0?'#fff':'#000';h+='<div class="cp-cell" style="background:'+bg+';color:'+fg+'" title="&'+c+' '+MC.colorNames[c]+'" onclick="pickC(\''+c+'\')">&'+c+'</div>'});h+='</div><div style="font-size:10px;color:#8b949e;margin-bottom:4px">格式:</div><div class="cp-format">';Object.keys(MC.formatCodes).forEach(function(k){h+='<div class="cp-fmt" onclick="pickC(\''+k+'\')">&'+k+'</div>'});h+='<div class="cp-fmt" onclick="pickC(\'r\')">&r</div></div><button class="btn btn-xs" style="margin-top:4px;width:100%" onclick="pickC(\'x6&x6&x6&x6&x6&x6\')">🎨 Hex</button>';popup.innerHTML=h;popup.classList.add('show')}
 function pickC(code){var input=document.getElementById('edit-locname'),cp=input.selectionStart,val=input.value;if(cp>0&&(val.charAt(cp-1)==='&'||val.charAt(cp-1)==='\u00a7')){input.value=val.substring(0,cp-1)+'&'+code+val.substring(cp);input.focus();input.selectionStart=input.selectionEnd=cp-1+2+code.length}document.getElementById('color-picker').classList.remove('show');updateLocPreview()}
-document.addEventListener('click',function(e){var pk=document.getElementById('color-picker'),inp=document.getElementById('edit-locname');if(pk.classList.contains('show')&&e.target!==inp&&!pk.contains(e.target))pk.classList.remove('show')});
+document.addEventListener('click',function(e){var cp=document.getElementById('color-picker'),inp=document.getElementById('edit-locname');if(cp.classList.contains('show')&&e.target!==inp&&!cp.contains(e.target))cp.classList.remove('show');var ip=document.getElementById('item-picker-popup'),ips=document.getElementById('item-picker-search');if(ip.classList.contains('show')&&e.target!==ips&&!ip.contains(e.target)&&!e.target.closest('#btn-add-item'))hideItemPicker()});
 
 // Click on empty canvas space: deselect arrow only (never deselect node)
 document.addEventListener('click',function(e){

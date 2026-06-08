@@ -144,7 +144,7 @@ var nativeFetch = window.fetch.bind(window);
 window.fetch = function(input, init) {
   init = init || {};
   init.headers = init.headers || {};
-  if (API_TOKEN) init.headers['X-SlimefunCustomGuide-Token'] = API_TOKEN;
+  if (API_TOKEN) init.headers['X-slimefunweaver-Token'] = API_TOKEN;
   return nativeFetch(input, init);
 };
 

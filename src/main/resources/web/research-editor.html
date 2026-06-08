@@ -229,7 +229,7 @@ window.fetch = function(input, init) {
   init = init || {};
   init.headers = init.headers || {};
   if (API_TOKEN) {
-    init.headers['X-SlimefunCustomGuide-Token'] = API_TOKEN;
+    init.headers['X-slimefunweaver-Token'] = API_TOKEN;
   }
   return nativeFetch(input, init);
 };
@@ -257,7 +257,8 @@ function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\
 function apiToInternal(apiJson) {
   itemToResearch = apiJson.itemToResearch || {};
   var list = (apiJson.researches || []).map(function(r) {
-    return {key: r.key, fullKey: r.fullKey, namespace: r.namespace, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: r.items || [], parents: (r.parents || []).map(stripNS), descendants: [], skills: {mining: r.miningLevelNeed || 0, farming: r.farmingLevelNeed || 0, foraging: r.foragingLevelNeed || 0, fishing: r.fishingLevelNeed || 0, excavation: r.excavationLevelNeed || 0, archery: r.archeryLevelNeed || 0, defense: r.defenseLevelNeed || 0, fighting: r.fightingLevelNeed || 0, agility: r.agilityLevelNeed || 0, enchanting: r.enchantingLevelNeed || 0, alchemy: r.alchemyLevelNeed || 0}, x: 0, y: 0};
+    var fullKey = r.fullKey || ((r.namespace || 'slimefun') + ':' + r.key);
+    return {key: fullKey, shortKey: r.key, fullKey: fullKey, namespace: r.namespace, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: r.items || [], parents: r.parents || [], descendants: [], skills: {mining: r.miningLevelNeed || 0, farming: r.farmingLevelNeed || 0, foraging: r.foragingLevelNeed || 0, fishing: r.fishingLevelNeed || 0, excavation: r.excavationLevelNeed || 0, archery: r.archeryLevelNeed || 0, defense: r.defenseLevelNeed || 0, fighting: r.fightingLevelNeed || 0, agility: r.agilityLevelNeed || 0, enchanting: r.enchantingLevelNeed || 0, alchemy: r.alchemyLevelNeed || 0}, x: 0, y: 0};
   });
   list.forEach(function(r) { r.parents.forEach(function(pk) { var pr = list.find(function(rr) { return rr.key === pk; }); if (pr && pr.descendants.indexOf(r.key) < 0) pr.descendants.push(r.key); }); });
   return list;
@@ -269,10 +270,9 @@ function saveResearches() {
   var payload = {researches: researches.map(function(r) {
     var needItems = r.parents.map(function(pk) {
       var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) return pr.items[0].id;
-      var mapped = itemToResearch[pk]; if (mapped) { var mpr = researches.find(function(rr) { return rr.fullKey === mapped || rr.key === mapped; }); if (mpr && mpr.items[0]) return mpr.items[0].id; }
       return null;
     }).filter(Boolean);
-    return {fullKey: r.fullKey || (r.namespace + ":" + r.key), levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
+    return {fullKey: r.fullKey || r.key, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
   return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { unsaved = {newResearches: new Set(), newDeps: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
 }
@@ -307,7 +307,7 @@ function buildResearchList(filter){
     st+='</div>';
     h+='<div class="r-item'+(selectedResearch&&selectedResearch.key===r.key?' active':'')+(isNew?' unsaved':'')+'" data-key="'+escapeKey(r.key)+'" onclick="selectResearch(\''+escapeKey(r.key)+'\')">'
       +'<div class="r-name">'+(isNew?'🟢 ':'')+MC.escapeHtml(r.name)+'</div>'
-      +'<div class="r-key">'+r.key+' | Lv.'+r.levelCost+'</div>'
+      +'<div class="r-key">'+MC.escapeHtml(r.shortKey||r.key)+' | Lv.'+r.levelCost+'</div>'
       +'<div class="r-items-wrap">'+tags+'</div>'+st+'</div>';
   });
   list.innerHTML=h||'<div style="padding:16px;color:#484f58;text-align:center;">无匹配</div>';
@@ -331,9 +331,9 @@ function renderRightPanel(){
   if(!selectedResearch){form.style.display='none';empty.style.display='block';yp.style.display='none';var erk=document.getElementById('edit-research-key');if(erk)erk.textContent='';return}
   form.style.display='block';empty.style.display='none';yp.style.display='block';
   var r=selectedResearch;
-  var ek=document.getElementById('edit-research-key');if(ek)ek.textContent=r.key;
-  var ei=document.getElementById('edit-key');if(ei)ei.value=r.key;
-  var ens=document.getElementById('edit-namespaced');if(ens)ens.textContent='slimefun:'+r.key;
+  var ek=document.getElementById('edit-research-key');if(ek)ek.textContent=r.shortKey||r.key;
+  var ei=document.getElementById('edit-key');if(ei)ei.value=r.shortKey||r.key;
+  var ens=document.getElementById('edit-namespaced');if(ens)ens.textContent=r.fullKey||r.key;
   var eln=document.getElementById('edit-locname');if(eln)eln.value=r.name;
   var elc=document.getElementById('edit-levelcost');if(elc)elc.value=r.levelCost;
   var emc=document.getElementById('edit-moneycost');if(emc)emc.value=r.moneyCost;
@@ -409,14 +409,14 @@ function renderDeps(){
   }
 function renderYamlPreview(){
   var r=selectedResearch,h=[];h.push('<span class="yaml-comment"># Researches.yml</span><span class="yaml-key">slimefun:</span>');
-  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.key)+':</span>');
+  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span>');
   h.push('    <span class="yaml-key">levelCost:</span> <span class="yaml-val">'+r.levelCost+'</span>');
   h.push('    <span class="yaml-key">moneyCost:</span> <span class="yaml-val">'+r.moneyCost+'</span>');
   var ni=r.parents.map(function(pk){var p=researches.find(function(rr){return rr.key===pk});return p&&p.items[0]?p.items[0].id:'?'});
   h.push('    <span class="yaml-key">need-unlocked-items:</span> <span class="yaml-val">['+ni.join(', ')+']</span>');
   h.push('    <span class="yaml-comment">... 12项技能等级</span>');
   h.push('');h.push('<span class="yaml-comment"># languages/zh-CN/researches.yml</span><span class="yaml-key">slimefun:</span>');
-  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.key)+':</span> <span class="yaml-val">'+MC.escapeHtml(r.name)+'</span>');
+  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span> <span class="yaml-val">'+MC.escapeHtml(r.name)+'</span>');
   document.getElementById('yaml-preview').innerHTML=h.join('\n');
 }
 
@@ -482,7 +482,7 @@ function renderGraph(){
     var itemH=itemNames.slice(0,4).map(function(n){return'<div class="gn-item">'+n+'</div>'}).join('');
     if(itemNames.length>4)itemH+='<div class="gn-item-more">...+'+(itemNames.length-4)+'个</div>';
     h+='<div class="gnode'+(isSel?' selected':'')+relC+'" style="left:'+r.x+'px;top:'+r.y+'px" data-key="'+escapeKey(r.key)+'" onclick="selectResearch(\''+escapeKey(r.key)+'\')">'
-      +'<div class="gn-hdr"><span>'+MC.escapeHtml(r.name)+'</span><span class="gn-key">'+r.key+'</span></div>'
+      +'<div class="gn-hdr"><span>'+MC.escapeHtml(r.name)+'</span><span class="gn-key">'+MC.escapeHtml(r.shortKey||r.key)+'</span></div>'
       +'<div class="gn-body">'+itemH+'</div>'
       +'<div class="gn-port gn-port-in" data-node="'+escapeKey(r.key)+'" title="拖到这里"></div>'
       +'<div class="gn-port gn-port-out" data-node="'+escapeKey(r.key)+'" title="拖拽连线" onmousedown="startDragConnect(event,\''+escapeKey(r.key)+'\')"></div></div>';

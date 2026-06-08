@@ -16,6 +16,10 @@
 package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.config.Config;
@@ -97,7 +101,7 @@ public class ResearchApiHandler implements HttpHandler {
             try { body = WebSecurity.readBody(exchange); }
             catch (WebSecurity.BodyTooLargeException e) { exchange.sendResponseHeaders(413, -1); return; }
             if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
-            saveResearchesFromJson(body);
+            if (!saveResearchesFromJson(body)) { exchange.sendResponseHeaders(500, -1); return; }
             serveJson(exchange, "{\"ok\":true}");
         } else {
             exchange.sendResponseHeaders(405, -1);
@@ -274,22 +278,64 @@ public class ResearchApiHandler implements HttpHandler {
         }
     }
 
-    private void saveResearchesFromJson(String json) {
-        String c = json.trim();
-        if (!c.startsWith("{\"researches\":[")) return;
-        int start = "{\"researches\":[".length(), end = c.lastIndexOf(']');
-        if (end <= start) return;
-        c = c.substring(start, end);
+    private boolean saveResearchesFromJson(String json) {
         Config config = Slimefun.getResearchCfg();
-        if (config == null) { plugin.getLogger().warning("Research config null, save aborted"); return; }
-        int depth = 0, objStart = -1;
-        for (int i = 0; i < c.length(); i++) {
-            char ch = c.charAt(i);
-            if (ch == '{') { if (depth == 0) objStart = i; depth++; }
-            else if (ch == '}') { depth--; if (depth == 0 && objStart >= 0) { applyResearchUpdate(c.substring(objStart, i + 1), config); objStart = -1; } }
-            else if (ch == '"') i = skipJsonString(c, i);
+        if (config == null) { plugin.getLogger().warning("Research config null, save aborted"); return false; }
+        List<ResearchUpdate> updates;
+        try {
+            updates = parseResearchSavePayload(json);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Invalid research save payload", e);
+            return false;
         }
+        for (ResearchUpdate update : updates) applyResearchUpdate(update, config);
         config.save(); plugin.getLogger().info("Researches.yml saved via web editor");
+        return true;
+    }
+
+    static List<ResearchUpdate> parseResearchSavePayload(String json) {
+        List<ResearchUpdate> updates = new ArrayList<>();
+        JsonElement parsed = new JsonParser().parse(json);
+        if (!parsed.isJsonObject()) return updates;
+        JsonObject rootObj = parsed.getAsJsonObject();
+        if (!rootObj.has("researches") || !rootObj.get("researches").isJsonArray()) return updates;
+        for (JsonElement element : rootObj.getAsJsonArray("researches")) {
+            if (!element.isJsonObject()) continue;
+            JsonObject obj = element.getAsJsonObject();
+            String fullKey = jsonString(obj, "fullKey");
+            if (fullKey == null || fullKey.isEmpty()) continue;
+            ResearchUpdate update = new ResearchUpdate(fullKey);
+            update.levelCost = jsonInt(obj, "levelCost");
+            update.moneyCost = jsonDouble(obj, "moneyCost");
+            update.enabled = jsonBoolean(obj, "enabled");
+            JsonArray needItems = jsonArray(obj, "needUnlockedItems");
+            if (needItems != null) {
+                update.needUnlockedItems = new ArrayList<>();
+                for (JsonElement needItem : needItems) {
+                    if (needItem.isJsonPrimitive()) update.needUnlockedItems.add(needItem.getAsString());
+                }
+            }
+            String[] skillKeys = {"miningLevelNeed", "farmingLevelNeed", "foragingLevelNeed", "fishingLevelNeed", "excavationLevelNeed", "archeryLevelNeed", "defenseLevelNeed", "fightingLevelNeed", "agilityLevelNeed", "enchantingLevelNeed", "alchemyLevelNeed"};
+            for (String skillKey : skillKeys) {
+                Integer value = jsonInt(obj, skillKey);
+                if (value != null) update.skillLevels.put(skillKey, value);
+            }
+            updates.add(update);
+        }
+        return updates;
+    }
+
+    static class ResearchUpdate {
+        final String fullKey;
+        Integer levelCost;
+        Double moneyCost;
+        Boolean enabled;
+        List<String> needUnlockedItems;
+        final Map<String, Integer> skillLevels = new LinkedHashMap<>();
+
+        ResearchUpdate(String fullKey) {
+            this.fullKey = fullKey;
+        }
     }
 
     private void applyResearchUpdate(String json, Config config) {
@@ -314,6 +360,42 @@ public class ResearchApiHandler implements HttpHandler {
         setIfInt(config, path + ".agilityLevelNeed", extractJsonInt(json, "agilityLevelNeed"));
         setIfInt(config, path + ".enchantingLevelNeed", extractJsonInt(json, "enchantingLevelNeed"));
         setIfInt(config, path + ".alchemyLevelNeed", extractJsonInt(json, "alchemyLevelNeed"));
+    }
+
+    private void applyResearchUpdate(ResearchUpdate update, Config config) {
+        String[] parts = update.fullKey.split(":", 2);
+        String ns = parts.length > 1 ? parts[0] : "slimefun", k = parts.length > 1 ? parts[1] : parts[0];
+        String path = ns + "." + k;
+        if (update.levelCost != null) config.setValue(path + ".levelCost", Math.max(0, update.levelCost));
+        if (update.moneyCost != null) config.setValue(path + ".moneyCost", Math.max(0, update.moneyCost));
+        if (update.enabled != null) config.setValue(path + ".enabled", update.enabled);
+        if (update.needUnlockedItems != null) config.setValue(path + ".need-unlocked-items", update.needUnlockedItems);
+        for (Map.Entry<String, Integer> entry : update.skillLevels.entrySet()) {
+            config.setValue(path + "." + entry.getKey(), Math.max(0, entry.getValue()));
+        }
+    }
+
+    private static String jsonString(JsonObject obj, String key) {
+        return obj.has(key) && !obj.get(key).isJsonNull() && obj.get(key).isJsonPrimitive() ? obj.get(key).getAsString() : null;
+    }
+
+    private static Integer jsonInt(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return null;
+        try { return obj.get(key).getAsInt(); } catch (Exception e) { return null; }
+    }
+
+    private static Double jsonDouble(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return null;
+        try { return obj.get(key).getAsDouble(); } catch (Exception e) { return null; }
+    }
+
+    private static Boolean jsonBoolean(JsonObject obj, String key) {
+        if (!obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return null;
+        try { return obj.get(key).getAsBoolean(); } catch (Exception e) { return null; }
+    }
+
+    private static JsonArray jsonArray(JsonObject obj, String key) {
+        return obj.has(key) && obj.get(key).isJsonArray() ? obj.getAsJsonArray(key) : null;
     }
 
     private static void setIfInt(Config config, String path, Integer v) { if (v != null) config.setValue(path, v); }

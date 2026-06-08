@@ -18,6 +18,10 @@ package cn.rmc.slimefunweaver.web;
 import cn.rmc.slimefunweaver.SlimefunWeaver;
 import cn.rmc.slimefunweaver.util.IconParser;
 import cn.rmc.slimefunweaver.util.VanillaMaterialLocalization;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -219,7 +223,7 @@ public class RecipeApiHandler implements HttpHandler {
             try { body = WebSecurity.readBody(exchange); }
             catch (WebSecurity.BodyTooLargeException e) { exchange.sendResponseHeaders(413, -1); return; }
             if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
-            saveRecipesFromJson(body);
+            if (!saveRecipesFromJson(body)) { exchange.sendResponseHeaders(500, -1); return; }
             serveJson(exchange, "{\"ok\":true}");
         } else {
             exchange.sendResponseHeaders(405, -1);
@@ -409,7 +413,7 @@ public class RecipeApiHandler implements HttpHandler {
         return new StoredRecipesSection(sec, list);
     }
 
-    private void saveRecipesFromJson(String json) {
+    private boolean saveRecipesFromJson(String json) {
         YamlConfiguration yaml;
         File finalFile = new File(plugin.getDataFolder(), "Recipes.yml");
         if (finalFile.exists()) {
@@ -424,39 +428,18 @@ public class RecipeApiHandler implements HttpHandler {
             root = yaml.createSection("slimefun");
         }
 
-        String content = json.trim();
-        if (!content.startsWith("{\"items\":{")) return;
-        int start = "{\"items\":{".length();
-        int depth = 1, end = -1;
-        for (int i = start; i < content.length(); i++) {
-            char ch = content.charAt(i);
-            if (ch == '{') depth++;
-            else if (ch == '}') { depth--; if (depth == 0) { end = i; break; } }
-            else if (ch == '"') i = skipJsonString(content, i);
+        Map<String, List<Map<String, Object>>> parsed;
+        try {
+            parsed = parseRecipeSavePayload(json);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Invalid recipe save payload", e);
+            return false;
         }
-        if (end <= start) return;
-        String c = content.substring(start, end);
-
-        depth = 0; int objStart = -1;
-        String currentItemId = null;
-        for (int i = 0; i < c.length(); i++) {
-            char ch = c.charAt(i);
-            if (ch == '{') {
-                depth++;
-                if (depth == 1) objStart = i;
-            } else if (ch == '}') {
-                depth--;
-                if (depth == 0 && objStart >= 0 && currentItemId != null) {
-                    applyRecipeSave(c.substring(objStart, i + 1), currentItemId, root);
-                    objStart = -1;
-                    currentItemId = null;
-                }
-            } else if (ch == '"' && depth == 0) {
-                int keyEnd = skipJsonString(c, i);
-                currentItemId = extractSimpleString(c.substring(i, keyEnd + 1));
-                i = keyEnd;
-                while (i + 1 < c.length() && c.charAt(i + 1) != '{') i++;
-            }
+        for (Map.Entry<String, List<Map<String, Object>>> entry : parsed.entrySet()) {
+            root.set(entry.getKey(), null);
+            if (entry.getValue().isEmpty()) continue;
+            ConfigurationSection itemSec = root.createSection(entry.getKey());
+            itemSec.set("recipes", entry.getValue());
         }
 
         File tempFile = new File(plugin.getDataFolder(), "Recipes.yml.tmp");
@@ -465,7 +448,7 @@ public class RecipeApiHandler implements HttpHandler {
             writer.flush();
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to save Recipes.yml", e);
-            return;
+            return false;
         }
         try {
             java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(),
@@ -473,12 +456,66 @@ public class RecipeApiHandler implements HttpHandler {
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             plugin.getLogger().log(Level.WARNING, "Failed to replace Recipes.yml", e);
+            return false;
         }
 
         storedRecipes = yaml;
         applyAllRecipes();
 
         plugin.getLogger().info("Recipes.yml saved and applied");
+        return true;
+    }
+
+    static Map<String, List<Map<String, Object>>> parseRecipeSavePayload(String json) {
+        Map<String, List<Map<String, Object>>> parsedRecipes = new LinkedHashMap<>();
+        JsonElement parsed = new JsonParser().parse(json);
+        if (!parsed.isJsonObject()) return parsedRecipes;
+        JsonObject rootObj = parsed.getAsJsonObject();
+        if (!rootObj.has("items") || !rootObj.get("items").isJsonObject()) return parsedRecipes;
+        JsonObject itemsObj = rootObj.getAsJsonObject("items");
+        for (Map.Entry<String, JsonElement> itemEntry : itemsObj.entrySet()) {
+            if (!itemEntry.getValue().isJsonObject()) continue;
+            JsonObject itemObj = itemEntry.getValue().getAsJsonObject();
+            if (!itemObj.has("recipes") || !itemObj.get("recipes").isJsonArray()) continue;
+            List<Map<String, Object>> recipeList = new ArrayList<>();
+            for (JsonElement recipeElement : itemObj.getAsJsonArray("recipes")) {
+                if (!recipeElement.isJsonObject()) continue;
+                JsonObject recipeObj = recipeElement.getAsJsonObject();
+                String type = jsonString(recipeObj, "type");
+                if (isNullRecipeType(type)) continue;
+                Map<String, Object> map = new LinkedHashMap<>();
+                if (type != null) map.put("type", type);
+                JsonArray inputArray = jsonArray(recipeObj, "input");
+                if (inputArray != null) {
+                    List<String> input = new ArrayList<>();
+                    for (JsonElement inputElement : inputArray) {
+                        if (inputElement.isJsonPrimitive()) input.add(inputElement.getAsString());
+                    }
+                    map.put("input", input);
+                }
+                String output = jsonString(recipeObj, "output");
+                if (output != null) map.put("output", output);
+                map.put("output-amount", clamp(jsonInt(recipeObj, "outputAmount", 1), 1, 64));
+                int processingTime = jsonInt(recipeObj, "processingTime", 0);
+                if (processingTime > 0) map.put("processing-time", processingTime);
+                recipeList.add(map);
+            }
+            if (!recipeList.isEmpty()) parsedRecipes.put(itemEntry.getKey(), recipeList);
+        }
+        return parsedRecipes;
+    }
+
+    private static String jsonString(JsonObject obj, String key) {
+        return obj.has(key) && !obj.get(key).isJsonNull() && obj.get(key).isJsonPrimitive() ? obj.get(key).getAsString() : null;
+    }
+
+    private static JsonArray jsonArray(JsonObject obj, String key) {
+        return obj.has(key) && obj.get(key).isJsonArray() ? obj.getAsJsonArray(key) : null;
+    }
+
+    private static int jsonInt(JsonObject obj, String key, int fallback) {
+        if (!obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return fallback;
+        try { return obj.get(key).getAsInt(); } catch (Exception e) { return fallback; }
     }
 
     private void applyRecipeSave(String json, String itemId, ConfigurationSection parent) {

@@ -164,7 +164,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
   <div class="toolbar-actions">
     <button class="btn btn-sm" onclick="discardChanges()">↶ 放弃修改</button>
-    <button class="btn btn-sm btn-primary" onclick="saveResearches()">💾 保存</button>
+    <button class="btn btn-sm btn-primary" id="btn-save-researches" onclick="saveResearches()">💾 保存</button>
   </div>
 </div>
 <div id="main" style="position:relative">
@@ -252,6 +252,9 @@ var MC={
 // ============ DATA: loaded from API ============
 var researches = [];
 var itemToResearch = {};
+var dirty = false, savingResearches = false;
+function markDirty(){dirty=true;var btn=document.getElementById('btn-save-researches');if(btn&&!savingResearches)btn.textContent='💾 保存 *'}
+function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}}
 function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function stripNS(fk) { var p = fk.split(":"); return p.length > 1 ? p.slice(1).join(":") : p[0]; }
 function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r')}
@@ -269,18 +272,21 @@ function loadResearches() {
 }
 function clampResearch(r){r.levelCost=Math.max(0,parseInt(r.levelCost)||0);r.moneyCost=Math.max(0,parseFloat(r.moneyCost)||0);Object.keys(r.skills||{}).forEach(function(k){r.skills[k]=Math.max(0,parseInt(r.skills[k])||0)});return r}
 function saveResearches() {
+  if(savingResearches)return;
+  savingResearches=true;var btn=document.getElementById('btn-save-researches');if(btn){btn.disabled=true;btn.textContent='保存中...'}
   var payload = {researches: researches.map(function(r) {
     clampResearch(r);
     var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
     r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) needItems.push(pr.items[0].id); } });
     return {fullKey: r.fullKey || r.key, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
-  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});r.needUnlockedItems = saved ? saved.needUnlockedItems : (r.needUnlockedItems || [])}); unsaved = {newResearches: new Set(), newDeps: new Set()}; buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { showToast("保存失败: " + e.message, "error"); });
+  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});r.needUnlockedItems = saved ? saved.needUnlockedItems : (r.needUnlockedItems || [])}); unsaved = {newResearches: new Set(), newDeps: new Set()}; savingResearches=false; clearDirty(); buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'} showToast("保存失败: " + e.message, "error"); });
 }
 function discardChanges(){
   if(!confirm('确定放弃所有未保存的修改？'))return;
   loadResearches().then(function(){
     unsaved={newResearches:new Set(),newDeps:new Set()};
+    clearDirty();
     selectedResearch=null;
     buildResearchList('');
     renderCenterTop();renderRightPanel();
@@ -342,12 +348,12 @@ function renderRightPanel(){
   var el=document.getElementById('enabled-label');if(el){el.textContent=r.enabled?'已启用':'已禁用';el.style.color=r.enabled?'#3fb950':'#f85149'}
   updateLocPreview();renderSkills();renderDeps();renderYamlPreview();
 }
-function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';renderYamlPreview();renderGraph()}
-function onCostChange(){if(!selectedResearch)return;selectedResearch.levelCost=Math.max(0,parseInt(document.getElementById('edit-levelcost').value)||0);selectedResearch.moneyCost=Math.max(0,parseFloat(document.getElementById('edit-moneycost').value)||0);document.getElementById('edit-levelcost').value=selectedResearch.levelCost;document.getElementById('edit-moneycost').value=selectedResearch.moneyCost;renderYamlPreview();buildResearchList(document.getElementById('research-search').value)}
+function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';markDirty();renderYamlPreview();renderGraph()}
+function onCostChange(){if(!selectedResearch)return;selectedResearch.levelCost=Math.max(0,parseInt(document.getElementById('edit-levelcost').value)||0);selectedResearch.moneyCost=Math.max(0,parseFloat(document.getElementById('edit-moneycost').value)||0);document.getElementById('edit-levelcost').value=selectedResearch.levelCost;document.getElementById('edit-moneycost').value=selectedResearch.moneyCost;markDirty();renderYamlPreview();buildResearchList(document.getElementById('research-search').value)}
 function updateLocPreview(){var v=document.getElementById('edit-locname').value;document.getElementById('loc-preview').innerHTML='预览: '+(v?MC.parseToHtml(v):'<span style="color:#484f58">空</span>')}
 var skillsDef=[{icon:'⛏',key:'mining',label:'采掘'},{icon:'🌾',key:'farming',label:'农耕'},{icon:'🪓',key:'foraging',label:'采伐'},{icon:'🎣',key:'fishing',label:'钓鱼'},{icon:'🏹',key:'archery',label:'弓箭'},{icon:'🛡',key:'defense',label:'防御'},{icon:'⚔',key:'fighting',label:'战斗'},{icon:'💨',key:'agility',label:'敏捷'},{icon:'✨',key:'enchanting',label:'附魔'},{icon:'🧪',key:'alchemy',label:'炼金'},{icon:'🔨',key:'excavation',label:'挖掘'}];
 function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" data-sk="'+sk.key+'" onchange="onSkillChange(this)"/></div>'});g.innerHTML=h}
-function onSkillChange(input){if(!selectedResearch)return;selectedResearch.skills[input.getAttribute('data-sk')]=Math.max(0,parseInt(input.value)||0);input.value=selectedResearch.skills[input.getAttribute('data-sk')];renderYamlPreview();renderGraph();showToast('技能已更新','info')}
+function onSkillChange(input){if(!selectedResearch)return;selectedResearch.skills[input.getAttribute('data-sk')]=Math.max(0,parseInt(input.value)||0);input.value=selectedResearch.skills[input.getAttribute('data-sk')];markDirty();renderYamlPreview();renderGraph();showToast('技能已更新','info')}
 function renderDeps(){
     document.getElementById('parents-count').textContent=selectedResearch.parents.length;
     var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="event.stopPropagation();removeParentDependency(\''+escapeKey(pk)+'\')">&times;</span></div>'});
@@ -362,6 +368,7 @@ function renderDeps(){
     var parent=researches.find(function(r){return r.key===pk});
     if(parent){var di=parent.descendants.indexOf(selectedResearch.key);if(di>=0)parent.descendants.splice(di,1)}
     unsaved.newDeps.delete(pk+'\u2192'+selectedResearch.key);
+    markDirty();
     renderRightPanel();autoLayout();renderGraph();
     buildResearchList(document.getElementById('research-search').value);
     showToast('已删除依赖','info');
@@ -523,7 +530,7 @@ function deselectArrow(){selectedArrow=null;renderGraph()}
 function deleteSelectedArrow(){
   if(!selectedArrow)return;var from=researches.find(function(r){return r.key===selectedArrow.fromKey}),to=researches.find(function(r){return r.key===selectedArrow.toKey});
   if(from){var di=from.descendants.indexOf(selectedArrow.toKey);if(di>=0)from.descendants.splice(di,1)}if(to){var pi=to.parents.indexOf(selectedArrow.fromKey);if(pi>=0)to.parents.splice(pi,1)}
-  unsaved.newDeps.delete(selectedArrow.fromKey+'\u2192'+selectedArrow.toKey);selectedArrow=null;
+  unsaved.newDeps.delete(selectedArrow.fromKey+'\u2192'+selectedArrow.toKey);selectedArrow=null;markDirty();
   autoLayout();if(selectedResearch){renderRightPanel();autoScrollToNode(selectedResearch.key)}buildResearchList(document.getElementById('research-search').value);showToast('已删除依赖','info')
 }
 function startDragConnect(e,fromKey){e.stopPropagation();e.preventDefault();var r=researches.find(function(rr){return rr.key===fromKey});if(!r)return;dragConnect={active:true,fromKey:fromKey,fromPortX:r.x+180,fromPortY:r.y+35}}
@@ -533,7 +540,7 @@ window.addEventListener('mouseup',function(e){
   if(toKey&&toKey!==dragConnect.fromKey){var from=researches.find(function(r){return r.key===dragConnect.fromKey}),to=researches.find(function(r){return r.key===toKey});
     if(from&&to&&from.descendants.indexOf(toKey)<0&&to.parents.indexOf(dragConnect.fromKey)<0){
       function hasPath(s,t,vis){if(!vis)vis=new Set();if(vis.has(s))return false;vis.add(s);if(s===t)return true;var r=researches.find(function(rr){return rr.key===s});if(!r)return false;return r.descendants.some(function(dk){return hasPath(dk,t,vis)})}
-      if(!hasPath(toKey,dragConnect.fromKey)){from.descendants.push(toKey);to.parents.push(dragConnect.fromKey);unsaved.newDeps.add(dragConnect.fromKey+'\u2192'+toKey);
+      if(!hasPath(toKey,dragConnect.fromKey)){from.descendants.push(toKey);to.parents.push(dragConnect.fromKey);unsaved.newDeps.add(dragConnect.fromKey+'\u2192'+toKey);markDirty();
         autoLayout();buildResearchList(document.getElementById('research-search').value);if(selectedResearch&&(selectedResearch.key===dragConnect.fromKey||selectedResearch.key===toKey)){renderRightPanel();autoScrollToNode(selectedResearch.key)}
         showToast('🟢 新依赖: '+from.name+' → '+to.name,'success')}else showToast('⚠ 循环依赖','info')}}
   dragConnect={active:false,fromKey:null,fromPortX:0,fromPortY:0}
@@ -546,6 +553,7 @@ container.addEventListener('wheel',function(e){e.preventDefault();var d=e.deltaY
 container.addEventListener('mousedown',function(e){if(dragConnect.active)return;if(e.target===container||e.target.classList.contains('hit')||e.target.id==='graph-svg'||e.target.id==='graph-world'||e.target.id==='graph-nodes'){isPanning=true;panStartX=e.clientX-graphOffsetX;panStartY=e.clientY-graphOffsetY;container.classList.add('panning')}});
 window.addEventListener('mousemove',function(e){if(!isPanning)return;graphOffsetX=e.clientX-panStartX;graphOffsetY=e.clientY-panStartY;applyTransform()});
 window.addEventListener('mouseup',function(){isPanning=false;container.classList.remove('panning')});
+window.addEventListener('beforeunload',function(e){if(dirty){e.preventDefault();e.returnValue=''}});
 
 // ═══ LAYOUT: auto-calculate all coordinates ═══
 function autoLayout(){

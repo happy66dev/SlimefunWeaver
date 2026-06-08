@@ -255,6 +255,7 @@ function setDirty(v) {
 }
 
 function selectItem(id) {
+  if (saving) { showToast('正在保存，请稍后再切换物品','info'); return; }
   if (dirty && selectedItemId !== id && !confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？')) return;
   setDirty(false);
   if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
@@ -567,12 +568,14 @@ function save() {
   bag.textContent = '保存中...'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
 
   var savingItemId = selectedItemId;
+  var savingItemName = originalItemName;
+  var savingTypeKey = currentTypeKey;
   var inputIds = slots.slice(0, visibleSlots()).map(function(s){return s && s.id !== 'AIR' ? s.id : 'AIR';});
-  var recipe = {type:currentTypeKey, input:inputIds, output:outputItemId, outputAmount:amount, processingTime:processingTime};
+  var recipe = {type:savingTypeKey, input:inputIds, output:outputItemId, outputAmount:amount, processingTime:processingTime};
   var payload = {items:{}};
   payload.items[savingItemId] = {recipes:[recipe]};
 
-  dlog('SAVE', 'saving ' + savingItemId + ': type=' + currentTypeKey + ' input=' + inputIds.join(',') + ' output=' + outputItemId + ' amt=' + amount + ' time=' + processingTime);
+  dlog('SAVE', 'saving ' + savingItemId + ': type=' + savingTypeKey + ' input=' + inputIds.join(',') + ' output=' + outputItemId + ' amt=' + amount + ' time=' + processingTime);
   var body = JSON.stringify(payload);
   dlog('SAVE', 'PUT /api/recipes body=' + body.substring(0, 200));
 
@@ -581,14 +584,14 @@ function save() {
     return r.json();
   }).then(function(){
     itemData[savingItemId] = {
-      id: savingItemId, name: originalItemName,
-      currentRecipeType: currentTypeKey,
+      id: savingItemId, name: savingItemName,
+      currentRecipeType: savingTypeKey,
       currentRecipe: inputIds.slice(),
       recipes: [recipe]
     };
     for (var i = 0; i < allItems.length; i++) {
       if (allItems[i].id === savingItemId) {
-        allItems[i].rt = currentTypeKey;
+        allItems[i].rt = savingTypeKey;
         break;
       }
     }

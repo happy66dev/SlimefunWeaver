@@ -488,7 +488,7 @@ function updateYaml() {
   if (info.hasTime && processingTime > 0) {
     timeLine = '\n        <span style="color:#ff7b72;">processing-time:</span> <span style="color:#79c0ff;">'+processingTime+'</span>';
   }
-  var y = '<span style="color:#ff7b72;">slimefun:</span>\n  <span style="color:#ff7b72;">'+esc(outputItemId)+':</span>\n    <span style="color:#ff7b72;">recipes:</span>\n      - <span style="color:#ff7b72;">type:</span> <span style="color:#a5d6ff;">'+esc(currentTypeKey)+'</span>\n        <span style="color:#ff7b72;">input:</span> <span style="color:#a5d6ff;">['+inputList.map(function(x){return '\''+esc(x)+'\''}).join(', ')+']</span>\n        <span style="color:#ff7b72;">output:</span> <span style="color:#a5d6ff;">'+esc(outputItemId)+'</span>\n        <span style="color:#ff7b72;">output-amount:</span> <span style="color:#79c0ff;">'+amount+'</span>'+timeLine;
+  var y = '<span style="color:#ff7b72;">slimefun:</span>\n  <span style="color:#ff7b72;">'+esc(selectedItemId)+':</span>\n    <span style="color:#ff7b72;">recipes:</span>\n      - <span style="color:#ff7b72;">type:</span> <span style="color:#a5d6ff;">'+esc(currentTypeKey)+'</span>\n        <span style="color:#ff7b72;">input:</span> <span style="color:#a5d6ff;">['+inputList.map(function(x){return '\''+esc(x)+'\''}).join(', ')+']</span>\n        <span style="color:#ff7b72;">output:</span> <span style="color:#a5d6ff;">'+esc(outputItemId)+'</span>\n        <span style="color:#ff7b72;">output-amount:</span> <span style="color:#79c0ff;">'+amount+'</span>'+timeLine;
   $id('yaml-preview').innerHTML = y;
 }
 

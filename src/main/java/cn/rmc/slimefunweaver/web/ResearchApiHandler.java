@@ -294,7 +294,7 @@ public class ResearchApiHandler implements HttpHandler {
                 for (ResearchUpdate update : updates) applyResearchUpdate(update, config);
                 config.save();
                 boolean reloaded = Slimefun.getConfigManager().load(true);
-                if (!reloaded) plugin.getLogger().warning("Researches.yml saved via web editor, but Slimefun reload returned false");
+                if (!reloaded) throw new IllegalStateException("Slimefun reload returned false");
                 plugin.getLogger().info("Researches.yml saved via web editor");
             });
             return true;

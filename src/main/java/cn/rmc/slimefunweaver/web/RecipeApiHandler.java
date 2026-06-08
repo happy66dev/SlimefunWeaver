@@ -174,6 +174,7 @@ public class RecipeApiHandler implements HttpHandler {
             String name = item.getItemName();
             String nameLower = name != null ? org.bukkit.ChatColor.stripColor(name).toLowerCase(Locale.ROOT) : "";
             if (!q.isEmpty() && !id.contains(q) && !nameLower.contains(q)) continue;
+            if (count >= max) break;
             if (!first) sb.append(','); first = false;
             sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(escapeJson(item.getId())).append("\",\"display\":\"")
               .append(escapeJson(nameLower.isEmpty() ? item.getId() : org.bukkit.ChatColor.stripColor(name)))
@@ -451,19 +452,6 @@ public class RecipeApiHandler implements HttpHandler {
             plugin.getLogger().log(Level.WARNING, "Failed to save Recipes.yml", e);
             return false;
         }
-        try {
-            java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            try {
-                java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e2) {
-                plugin.getLogger().log(Level.WARNING, "Failed to replace Recipes.yml", e2);
-                return false;
-            }
-        }
-
         YamlConfiguration previousRecipes = storedRecipes;
         storedRecipes = yaml;
         try {
@@ -472,6 +460,20 @@ public class RecipeApiHandler implements HttpHandler {
             storedRecipes = previousRecipes;
             plugin.getLogger().log(Level.WARNING, "Failed to apply Recipes.yml", e);
             return false;
+        }
+
+        try {
+            java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try {
+                java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e2) {
+                storedRecipes = previousRecipes;
+                plugin.getLogger().log(Level.WARNING, "Failed to replace Recipes.yml", e2);
+                return false;
+            }
         }
 
         plugin.getLogger().info("Recipes.yml saved and applied");

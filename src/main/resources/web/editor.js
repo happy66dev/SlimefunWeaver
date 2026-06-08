@@ -142,12 +142,13 @@ var Dialog = {
 
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
-  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all', saving: false
+  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all', saving: false, dirtyVersion: 0
 };
 
 function $(id) { return document.getElementById(id); }
 
 function markDirty() {
+  state.dirtyVersion++;
   if (!state.dirty) { state.dirty = true; updateSaveStatus(); }
 }
 
@@ -956,6 +957,7 @@ function nextPage() { var max = getMaxPage(); if (state.currentPage < max) { sta
 async function saveAll() {
   if (state.saving) return;
   state.saving = true;
+  var savingDirtyVersion = state.dirtyVersion;
   syncCurrentSelection();
   var btn = $('btn-save');
   btn.disabled = true;
@@ -968,7 +970,8 @@ async function saveAll() {
     var body = JSON.stringify({ categories: state.categories });
     var resp = await fetch('/api/categories', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: body });
     if (resp.ok) {
-      clearDirty();
+      if (state.dirtyVersion === savingDirtyVersion) clearDirty();
+      else updateSaveStatus();
       Toast.show('保存成功！分类已重新加载', 'success');
     } else {
       var data = null;

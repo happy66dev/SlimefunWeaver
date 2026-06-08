@@ -252,8 +252,8 @@ var MC={
 // ============ DATA: loaded from API ============
 var researches = [];
 var itemToResearch = {};
-var dirty = false, savingResearches = false;
-function markDirty(){dirty=true;var btn=document.getElementById('btn-save-researches');if(btn&&!savingResearches)btn.textContent='💾 保存 *'}
+var dirty = false, savingResearches = false, dirtyVersion = 0;
+function markDirty(){dirty=true;dirtyVersion++;var btn=document.getElementById('btn-save-researches');if(btn&&!savingResearches)btn.textContent='💾 保存 *'}
 function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}}
 function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function stripNS(fk) { var p = fk.split(":"); return p.length > 1 ? p.slice(1).join(":") : p[0]; }
@@ -274,13 +274,14 @@ function clampResearch(r){r.levelCost=Math.max(0,parseInt(r.levelCost)||0);r.mon
 function saveResearches() {
   if(savingResearches)return;
   savingResearches=true;var btn=document.getElementById('btn-save-researches');if(btn){btn.disabled=true;btn.textContent='保存中...'}
+  var savingDirtyVersion = dirtyVersion;
   var payload = {researches: researches.map(function(r) {
     clampResearch(r);
     var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
     r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) needItems.push(pr.items[0].id); } });
     return {fullKey: r.fullKey || r.key, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
-  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});r.needUnlockedItems = saved ? saved.needUnlockedItems : (r.needUnlockedItems || [])}); unsaved = {newResearches: new Set(), newDeps: new Set()}; savingResearches=false; clearDirty(); buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'} showToast("保存失败: " + e.message, "error"); });
+  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});r.needUnlockedItems = saved ? saved.needUnlockedItems : (r.needUnlockedItems || [])}); unsaved = {newResearches: new Set(), newDeps: new Set()}; savingResearches=false;if(dirtyVersion===savingDirtyVersion)clearDirty();else if(btn){btn.disabled=false;btn.textContent='💾 保存 *'} buildResearchList(document.getElementById("research-search").value); renderGraph(); showToast("保存成功", "success"); }).catch(function(e) { savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'} showToast("保存失败: " + e.message, "error"); });
 }
 function discardChanges(){
   if(savingResearches){showToast('正在保存，请稍后再放弃修改','info');return}

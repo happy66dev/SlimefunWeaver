@@ -197,7 +197,7 @@ var MC = {
   escapeHtml: function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 };
 
-var itemData = {}, recipeTypes = [], itemNames = {}, allItems = [], selectedItemId = null, dirty = false, saving = false;
+var itemData = {}, recipeTypes = [], itemNames = {}, allItems = [], selectedItemId = null, dirty = false, saving = false, dirtyVersion = 0;
 var currentTypeKey = '', slots = [], outputItemId = '', outputItemName = '', amount = 1, processingTime = 0;
 var pickerTarget = 'slot', pickerSlotIdx = -1;
 var popupCache = [];
@@ -246,6 +246,7 @@ function filterItems(v) { renderItemList(v); }
 var pendingSelectTimer = null;
 
 function setDirty(v) {
+  if (v) dirtyVersion++;
   dirty = !!v;
   var bag = $id('save-badge');
   if (!bag) return;
@@ -573,6 +574,7 @@ function save() {
   var savingItemId = selectedItemId;
   var savingItemName = originalItemName;
   var savingTypeKey = currentTypeKey;
+  var savingDirtyVersion = dirtyVersion;
   var inputIds = slots.slice(0, visibleSlots()).map(function(s){return s && s.id !== 'AIR' ? s.id : 'AIR';});
   var recipe = {type:savingTypeKey, input:inputIds, output:outputItemId, outputAmount:amount, processingTime:processingTime};
   var payload = {items:{}};
@@ -599,8 +601,12 @@ function save() {
       }
     }
     saving = false;
-    if (selectedItemId === savingItemId) setDirty(false);
-    bag.textContent = '已保存 · 实时生效'; bag.style.background='#1a2f1a'; bag.style.color='#3fb950';
+    if (selectedItemId === savingItemId && dirtyVersion === savingDirtyVersion) {
+      setDirty(false);
+      bag.textContent = '已保存 · 实时生效'; bag.style.background='#1a2f1a'; bag.style.color='#3fb950';
+    } else if (dirty) {
+      bag.textContent = '未保存'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
+    }
     dlog('SAVE', 'save success, itemData + allItems updated');
     showToast('合成表已更新 · 实时生效','success');
   }).catch(function(e){

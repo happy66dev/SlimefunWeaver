@@ -33,10 +33,12 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .right{flex:0 0 280px;padding:12px;overflow-y:auto}
 .search-box{background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;padding:6px 8px;font-size:11px;width:calc(100% - 16px);margin:8px}
 .search-box:focus{outline:none;border-color:#e94560}
-.item-row{padding:6px 10px;border-left:3px solid transparent;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:0.15s;color:#b1bac4;font-size:11px}
+.item-row{padding:6px 10px;border-left:3px solid transparent;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:0.15s;color:#b1bac4;font-size:11px}
 .item-row:hover{background:#1a1f2b;color:#c9d1d9}
 .item-row.active{border-left-color:#e94560;background:#1a1f2b;color:#e94560}
-.item-row .rtag{font-size:9px;color:#484f58}
+.item-row .iname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-row .rtag{font-size:9px;color:#484f58;flex-shrink:0;max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-row .rtag.none{color:#d29922}
 .recipe-info{display:flex;gap:8px;align-items:center;padding:8px 16px;background:#1a2230;border-radius:6px;border:1px solid #30363d;font-size:12px;flex-wrap:wrap;justify-content:center}
 .recipe-info .ri-name{color:#79c0ff;font-weight:600}
 .recipe-info .ri-key{color:#8b949e;font-size:10px}
@@ -203,7 +205,9 @@ var originalItemName = '';
 
 function $id(id) { return document.getElementById(id); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,'\\\''); }
+function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
+function isNullRecipeType(key) { return !key || key === 'null' || /:null$/i.test(key); }
+function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key.split(':').pop(); }
 
 function loadAll() {
   dlog('INIT', 'loadAll: fetching /api/recipes');
@@ -228,9 +232,10 @@ function renderItemList(filter) {
   allItems.forEach(function(it){
     var stripName = MC.strip(it.name).toLowerCase();
     if (q && it.id.toLowerCase().indexOf(q)<0 && stripName.indexOf(q)<0) return;
-    var rtShort = it.rt ? it.rt.split(':').pop() : '';
+    var rtShort = shortRecipeType(it.rt);
+    var rtClass = isNullRecipeType(it.rt) ? 'rtag none' : 'rtag';
     h+='<div class="item-row'+(selectedItemId===it.id?' active':'')+'" data-id="'+it.id+'" onclick="selectItem(\''+escKey(it.id)+'\')">'
-      +'<span>'+MC.parseToHtml(it.name)+'</span><span class="rtag">'+rtShort+'</span></div>';
+      +'<span class="iname">'+MC.parseToHtml(it.name)+'</span><span class="'+rtClass+'">'+esc(rtShort)+'</span></div>';
   });
   $id('item-list').innerHTML = h || '<div style="padding:12px;color:#484f58;text-align:center;">无匹配</div>';
 }
@@ -264,7 +269,7 @@ function doSelectItem(id) {
   renderItemList($id('item-search').value);
 
   var recipes = d.recipes || [];
-  if (recipes.length > 0) {
+  if (recipes.length > 0 && !isNullRecipeType(recipes[0].type)) {
     var r = recipes[0];
     currentTypeKey = r.type || d.currentRecipeType || '';
     slots = (r.input||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
@@ -274,15 +279,15 @@ function doSelectItem(id) {
     processingTime = r.processingTime || 0;
     dlog('SELECT', 'loaded recipes[0]: type=' + currentTypeKey + ' input=' + (r.input||[]).join(',') + ' output=' + outputItemId + ' amt=' + amount + ' time=' + processingTime);
   } else {
-    currentTypeKey = d.currentRecipeType || '';
-    slots = (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+    currentTypeKey = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
+    slots = currentTypeKey ? (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};}) : [];
     outputItemId = d.id;
     outputItemName = d.name;
     amount = 1;
     processingTime = 0;
     dlog('SELECT', 'using currentRecipe: type=' + currentTypeKey + ' input=' + (d.currentRecipe||[]).join(','));
   }
-  if (slots.length === 0) slots = [null];
+  if (slots.length === 0 && currentTypeKey) slots = [null];
 
   $id('right-panel').style.display = 'block';
   $id('center-empty').style.display = 'none';
@@ -319,15 +324,19 @@ function renderGrid() {
   if (info.hasTime && processingTime > 0) h += '<span class="ri-dots">|</span><span>耗时 ' + processingTime + ' tick</span>';
   h += '</div>';
 
-  h += '<div class="recipe-grid" style="grid-template-columns:repeat('+cols+', 56px);">';
-  for (var i = 0; i < total; i++) {
-    var s = slots[i];
-    var cl = s && s.id !== 'AIR' ? 'slot filled' : 'slot';
-    var inner = s && s.id !== 'AIR' ? resolveDisplayName(s.id) : '<span style="font-size:18px;color:#484f58;">+</span>';
-    h += '<div class="'+cl+'" onclick="openSlotPicker('+i+')">'+inner+'</div>';
+  if (total > 0) {
+    h += '<div class="recipe-grid" style="grid-template-columns:repeat('+cols+', 56px);">';
+    for (var i = 0; i < total; i++) {
+      var s = slots[i];
+      var cl = s && s.id !== 'AIR' ? 'slot filled' : 'slot';
+      var inner = s && s.id !== 'AIR' ? resolveDisplayName(s.id) : '<span style="font-size:18px;color:#484f58;">+</span>';
+      h += '<div class="'+cl+'" onclick="openSlotPicker('+i+')">'+inner+'</div>';
+    }
+    h += '</div>';
+    h += '<div class="arrow-dn">↓</div>';
+  } else {
+    h += '<div style="padding:18px;text-align:center;color:#d29922;background:#1a1608;border:1px solid #3b2f0b;border-radius:8px;">该物品当前没有可编辑合成方式，请先在右侧选择一种合成方式</div>';
   }
-  h += '</div>';
-  h += '<div class="arrow-dn">↓</div>';
   h += '<div class="oslot">' + resolveDisplayName(outputItemId) + '<span>×' + amount + '</span></div>';
 
   $id('center-panel').innerHTML = h;
@@ -340,6 +349,7 @@ function renderGrid() {
 }
 
 function getTypeInfo(key) {
+  if (isNullRecipeType(key)) return {name:'未设置合成方式', slots:0, cols:1, hasTime:false};
   var found = recipeTypes.find(function(t){return t.key===key;});
   var name = found ? found.name : (key||'');
   var hasTime = found ? !!found.hasTime : false;
@@ -363,6 +373,7 @@ function getTypeInfo(key) {
 function renderTypeList() {
   var h = '';
   recipeTypes.forEach(function(t){
+    if (isNullRecipeType(t.key)) return;
     var builtinTag = t.isBuiltin ? '' : ' <span style="color:#d29922;font-size:9px;">addon</span>';
     h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" onclick="changeType(\''+escKey(t.key)+'\')">'
       + esc(t.name) + builtinTag + ' <span class="tns">' + esc(t.key) + '</span></div>';
@@ -413,6 +424,11 @@ function doPopupSearch() {
 
 function loadPopupMaterials(q) {
   var body = $id('popup-body');
+  if (!(q||'').trim()) {
+    popupCache = [];
+    body.innerHTML = '<div style="color:#8b949e;text-align:center;padding:16px;">输入关键词搜索 (原版 + Slimefun 物品)</div>';
+    return;
+  }
   body.innerHTML = '<div style="color:#8b949e;text-align:center;padding:16px;">搜索中...</div>';
   var url = '/api/recipes/materials?q=' + encodeURIComponent(q||'');
   dlog('API', 'GET ' + url);
@@ -462,6 +478,10 @@ function changeAmount(d) {
 }
 
 function updateYaml() {
+  if (isNullRecipeType(currentTypeKey)) {
+    $id('yaml-preview').innerHTML = '<span style="color:#d29922;">请选择有效合成方式后预览 Recipes.yml</span>';
+    return;
+  }
   var info = getTypeInfo(currentTypeKey);
   var inputList = slots.map(function(s){return s&&s.id!=='AIR'?s.id:'AIR';});
   var timeLine = '';
@@ -478,23 +498,23 @@ function revertItem() {
   var d = itemData[selectedItemId];
   if (d) {
     var recipes = d.recipes || [];
-    if (recipes.length > 0) {
+    if (recipes.length > 0 && !isNullRecipeType(recipes[0].type)) {
       var r = recipes[0];
-      currentTypeKey = r.type || d.currentRecipeType || '';
+      currentTypeKey = isNullRecipeType(r.type || d.currentRecipeType) ? '' : (r.type || d.currentRecipeType || '');
       slots = (r.input||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
       outputItemId = r.output || d.id;
       outputItemName = resolveName(outputItemId);
       amount = r.outputAmount || 1;
       processingTime = r.processingTime || 0;
     } else {
-      currentTypeKey = d.currentRecipeType || '';
-      slots = (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};});
+      currentTypeKey = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
+      slots = currentTypeKey ? (d.currentRecipe||[]).map(function(inp){return {id:inp, name:resolveName(inp)};}) : [];
       outputItemId = d.id;
       outputItemName = d.name;
       amount = 1;
       processingTime = 0;
     }
-    if (slots.length === 0) slots = [null];
+    if (slots.length === 0 && currentTypeKey) slots = [null];
     renderTypeList();
     renderGrid();
     updateYaml();
@@ -515,6 +535,7 @@ function revertFromServer() {
 
 function save() {
   if (!selectedItemId) { showToast('请先选择物品','error'); return; }
+  if (isNullRecipeType(currentTypeKey)) { showToast('请先选择有效合成方式','error'); return; }
   var bag = $id('save-badge');
   bag.textContent = '保存中...'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
 

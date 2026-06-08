@@ -154,11 +154,15 @@ public class RecipeApiHandler implements HttpHandler {
                 if (p.startsWith("q=")) q = URLDecoder.decode(p.substring(2), "UTF-8").toLowerCase(Locale.ROOT).trim();
             }
         }
+        if (q.isEmpty()) {
+            serveJson(exchange, "{\"results\":[]}");
+            return;
+        }
         if (plugin.isDebugEnabled()) plugin.getLogger().info("[RecipeAPI] materials search q=" + q);
         StringBuilder sb = new StringBuilder("{\"results\":[");
         boolean first = true;
         int count = 0;
-        int max = q.isEmpty() ? 0 : 80;
+        int max = 80;
 
         for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
             String id = item.getId().toLowerCase(Locale.ROOT);
@@ -306,13 +310,14 @@ public class RecipeApiHandler implements HttpHandler {
                 List<Map<?, ?>> recipes = parsed.recipes;
                 if (recipes != null) {
                     for (Map<?, ?> r : recipes) {
+                        if (isNullRecipeType(String.valueOf(r.get("type")))) continue;
                         if (hasStored) sb.append(',');
                         hasStored = true;
                         sb.append(recipeToJson(r, id));
                     }
                 }
             }
-            if (!hasStored && rtKey != null) {
+            if (!hasStored && rtKey != null && !isNullRecipeType(rtKey)) {
                 sb.append(defaultRecipeJson(id, rtKey, recipe));
             }
             sb.append(']');
@@ -480,8 +485,6 @@ public class RecipeApiHandler implements HttpHandler {
         String recipesJson = extractJsonArray(json, "recipes");
         if (recipesJson == null) return;
 
-        parent.set(itemId, null);
-        ConfigurationSection itemSec = parent.createSection(itemId);
         List<Map<String, Object>> recipeList = new ArrayList<>();
 
         int depth = 0, objStart = -1;
@@ -496,6 +499,10 @@ public class RecipeApiHandler implements HttpHandler {
                     String rj = recipesJson.substring(objStart, i + 1);
                     Map<String, Object> map = new LinkedHashMap<>();
                     String type = extractJsonStringSimple(rj, "type");
+                    if (isNullRecipeType(type)) {
+                        objStart = -1;
+                        continue;
+                    }
                     if (type != null) map.put("type", type);
                     List<String> input = extractJsonStringArray(rj, "input");
                     if (input != null) map.put("input", input);
@@ -512,6 +519,9 @@ public class RecipeApiHandler implements HttpHandler {
                 i = skipJsonString(recipesJson, i);
             }
         }
+        parent.set(itemId, null);
+        if (recipeList.isEmpty()) return;
+        ConfigurationSection itemSec = parent.createSection(itemId);
         itemSec.set("recipes", recipeList);
     }
 
@@ -589,6 +599,7 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private static RecipeType findRecipeTypeByKey(String key, Map<String, RecipeType> resolved) {
+        if (isNullRecipeType(key)) return null;
         RecipeType cached = resolved.get(key);
         if (cached != null) return cached;
 
@@ -601,6 +612,10 @@ public class RecipeApiHandler implements HttpHandler {
             } catch (Exception ignored) {}
         }
         return null;
+    }
+
+    private static boolean isNullRecipeType(String key) {
+        return key == null || "null".equalsIgnoreCase(key) || key.toLowerCase(Locale.ROOT).endsWith(":null");
     }
 
     private String readDisplayName(RecipeType rt, String key) {

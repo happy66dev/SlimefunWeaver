@@ -340,12 +340,12 @@ function renderRightPanel(){
   var el=document.getElementById('enabled-label');if(el){el.textContent=r.enabled?'已启用':'已禁用';el.style.color=r.enabled?'#3fb950':'#f85149'}
   updateLocPreview();renderSkills();renderDeps();renderYamlPreview();
 }
-function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';renderGraph()}
+function onEnabledToggle(){if(!selectedResearch)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';renderYamlPreview();renderGraph()}
 function onCostChange(){if(!selectedResearch)return;selectedResearch.levelCost=parseInt(document.getElementById('edit-levelcost').value)||0;selectedResearch.moneyCost=parseFloat(document.getElementById('edit-moneycost').value)||0;renderYamlPreview();buildResearchList(document.getElementById('research-search').value)}
 function updateLocPreview(){var v=document.getElementById('edit-locname').value;document.getElementById('loc-preview').innerHTML='预览: '+(v?MC.parseToHtml(v):'<span style="color:#484f58">空</span>')}
 var skillsDef=[{icon:'⛏',key:'mining',label:'采掘'},{icon:'🌾',key:'farming',label:'农耕'},{icon:'🪓',key:'foraging',label:'采伐'},{icon:'🎣',key:'fishing',label:'钓鱼'},{icon:'🏹',key:'archery',label:'弓箭'},{icon:'🛡',key:'defense',label:'防御'},{icon:'⚔',key:'fighting',label:'战斗'},{icon:'💨',key:'agility',label:'敏捷'},{icon:'✨',key:'enchanting',label:'附魔'},{icon:'🧪',key:'alchemy',label:'炼金'},{icon:'🔨',key:'excavation',label:'挖掘'}];
 function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" data-sk="'+sk.key+'" onchange="onSkillChange(this)"/></div>'});g.innerHTML=h}
-function onSkillChange(input){if(!selectedResearch)return;selectedResearch.skills[input.getAttribute('data-sk')]=parseInt(input.value)||0;renderGraph();showToast('技能已更新','info')}
+function onSkillChange(input){if(!selectedResearch)return;selectedResearch.skills[input.getAttribute('data-sk')]=parseInt(input.value)||0;renderYamlPreview();renderGraph();showToast('技能已更新','info')}
 function renderDeps(){
     document.getElementById('parents-count').textContent=selectedResearch.parents.length;
     var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="event.stopPropagation();removeParentDependency(\''+escapeKey(pk)+'\')">&times;</span></div>'});
@@ -406,7 +406,7 @@ function renderYamlPreview(){
   h.push('    <span class="yaml-key">moneyCost:</span> <span class="yaml-val">'+r.moneyCost+'</span>');
   var ni=r.parents.map(function(pk){var p=researches.find(function(rr){return rr.key===pk});return p&&p.items[0]?p.items[0].id:'?'});
   h.push('    <span class="yaml-key">need-unlocked-items:</span> <span class="yaml-val">['+ni.join(', ')+']</span>');
-  h.push('    <span class="yaml-comment">... 12项技能等级</span>');
+  skillsDef.forEach(function(sk){h.push('    <span class="yaml-key">'+sk.key+'LevelNeed:</span> <span class="yaml-val">'+(r.skills[sk.key]||0)+'</span>')});
   h.push('');h.push('<span class="yaml-comment"># languages/zh-CN/researches.yml</span><span class="yaml-key">slimefun:</span>');
   h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span> <span class="yaml-val">'+MC.escapeHtml(r.name)+'</span>');
   document.getElementById('yaml-preview').innerHTML=h.join('\n');

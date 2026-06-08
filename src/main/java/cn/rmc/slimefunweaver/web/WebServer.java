@@ -39,6 +39,7 @@ public class WebServer {
             RecipeApiHandler recipeHandler = new RecipeApiHandler(handler.getPlugin());
             server.createContext("/recipes.html", recipeHandler);
             server.createContext("/api/recipes", recipeHandler);
+            server.createContext("/api/recipes/materials", recipeHandler);
             server.createContext("/api/recipe-types", recipeHandler);
         }
         server.setExecutor(null);

@@ -456,8 +456,12 @@ public class RecipeApiHandler implements HttpHandler {
                 java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to replace Recipes.yml", e);
-            return false;
+            try {
+                java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e2) {
+                plugin.getLogger().log(Level.WARNING, "Failed to replace Recipes.yml", e2);
+                return false;
+            }
         }
 
         YamlConfiguration previousRecipes = storedRecipes;

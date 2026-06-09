@@ -639,6 +639,7 @@ function revertItem() {
 
 function revertFromServer() {
   if (saving) { showToast('正在保存，请稍后再重新加载','info'); return; }
+  if (dirty && !confirm('有未保存修改，确定从服务器重新加载并丢弃这些修改？')) return;
   dlog('REVERT', 'revertFromServer: full reload from server');
   selectedItemId = null;
   $id('right-panel').style.display = 'none';

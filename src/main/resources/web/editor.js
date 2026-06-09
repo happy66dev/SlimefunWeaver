@@ -453,7 +453,7 @@ function swapItems(fromPage, fromSlot, toPage, toSlot) {
   if (toItem) { toItem.slot = fromSlot; toItem.page = fromPage; }
   fromItem.slot = toSlot;
   fromItem.page = toPage;
-  markDirty();
+  if (fromPage !== toPage || fromSlot !== toSlot) markDirty();
   renderGrid();
 }
 

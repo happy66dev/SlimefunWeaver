@@ -205,7 +205,7 @@ var originalItemName = '';
 
 function $id(id) { return document.getElementById(id); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r')/*内部工具,防御性保留*/.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function isNullRecipeType(key) { return !key || key === 'null' || /:null$/i.test(key); }
 function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key.split(':').pop(); }
 

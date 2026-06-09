@@ -914,8 +914,8 @@ async function doSearch() {
     if (results.length > 0) {
       results.forEach(function(r) {
         var typeClass = r.type === 'VANILLA' ? 'vanilla' : (r.type === 'HEAD' ? 'head' : 'slimefun');
-        var safeType = (r.type || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-        var safeId = (r.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        var safeType = (r.type || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\')/*内部工具,防御性保留*/;
+        var safeId = (r.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;')/*内部工具,防御性保留*/;
         html += '<div class="picker-item" onclick="pickMaterial(\'' + safeType + '\',\'' + safeId + '\')">' +
           '<span class="item-type ' + typeClass + '">' + r.type + '</span>' +
           '<span>' + MC.parseToHtml(r.display || r.id) + '</span>' +

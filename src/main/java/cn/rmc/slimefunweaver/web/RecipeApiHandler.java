@@ -446,21 +446,18 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private static class StoredRecipesSection {
-        final ConfigurationSection section;
         final List<Map<?, ?>> recipes;
-        StoredRecipesSection(ConfigurationSection s, List<Map<?, ?>> r) { section = s; recipes = r; }
+        StoredRecipesSection(List<Map<?, ?>> r) { recipes = r; }
     }
 
     private static StoredRecipesSection parseRecipes(YamlConfiguration yaml, String itemId) {
-        ConfigurationSection sec = yaml.getConfigurationSection("slimefun." + itemId);
-        if (sec == null) return new StoredRecipesSection(null, null);
-        List<?> raw = sec.getList("recipes");
-        if (raw == null) return new StoredRecipesSection(sec, null);
+        List<?> raw = yaml.getList("slimefun." + itemId + ".recipes");
+        if (raw == null) return new StoredRecipesSection(null);
         List<Map<?, ?>> list = new ArrayList<>();
         for (Object entry : raw) {
             if (entry instanceof Map) list.add((Map<?, ?>) entry);
         }
-        return new StoredRecipesSection(sec, list);
+        return new StoredRecipesSection(list);
     }
 
     private boolean saveRecipesFromJson(String json) {
@@ -707,8 +704,10 @@ public class RecipeApiHandler implements HttpHandler {
             SlimefunItem mItem = SlimefunItem.getById(machineId);
             if (mItem instanceof MultiBlockMachine) {
                 MultiBlockMachine mbm = (MultiBlockMachine) mItem;
+                ItemStack output = item.getRecipeOutput();
+                if (output == null) continue;
                 toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(item.getRecipe());
-                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{item.getRecipeOutput()});
+                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{output});
             }
         }
         for (MultiBlockMachine mbm : toRebuild.keySet()) {

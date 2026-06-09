@@ -318,11 +318,11 @@ public class ResearchApiHandler implements HttpHandler {
     private String readResearchConfigContent(Config config) {
         try {
             File file = config.getFile();
-            if (file == null || !file.exists()) return null;
+            if (file == null || !file.exists()) return "\0";
             return new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to backup Researches.yml before web save", e);
-            return null;
+            return "\0";
         }
     }
 
@@ -332,7 +332,7 @@ public class ResearchApiHandler implements HttpHandler {
             if (file == null) return;
             runSync(() -> {
                 try {
-                    if (previousContent == null) java.nio.file.Files.deleteIfExists(file.toPath());
+                    if ("\0".equals(previousContent)) java.nio.file.Files.deleteIfExists(file.toPath());
                     else java.nio.file.Files.write(file.toPath(), previousContent.getBytes(StandardCharsets.UTF_8));
                 } catch (IOException e) { throw new RuntimeException(e); }
                 config.reload();

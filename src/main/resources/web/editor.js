@@ -184,13 +184,14 @@ async function discardChanges() {
     state.reloading = true;
     loadCategories().then(function(ok) {
       if (!ok) { state.reloading = false; return; }
-      state.selectedCategory = null;
-      state.selectedNode = null;
-      state.currentPage = 1;
-      state.reloading = false;
-      renderGrid();
-      renderEditor();
-      Toast.show('已从服务器重新加载', 'info');
+      try {
+        state.selectedCategory = null;
+        state.selectedNode = null;
+        state.currentPage = 1;
+        renderGrid();
+        renderEditor();
+        Toast.show('已从服务器重新加载', 'info');
+      } finally { state.reloading = false; }
     }).catch(function(e) { state.reloading = false; Toast.show('操作失败: ' + e.message, 'error'); });
   });
 }

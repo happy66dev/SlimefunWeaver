@@ -302,9 +302,10 @@ public class ResearchApiHandler implements HttpHandler {
             plugin.getLogger().log(Level.WARNING, "Invalid research save payload", e);
             return false;
         }
-        String previousContent = readResearchConfigContent(config);
+        String[] previousContent = new String[1];
         try {
             runSync(() -> {
+                previousContent[0] = readResearchConfigContent(config);
                 for (ResearchUpdate update : updates) applyResearchUpdate(update, config);
                 config.save();
                 boolean reloaded = Slimefun.getConfigManager().load(true);
@@ -313,7 +314,7 @@ public class ResearchApiHandler implements HttpHandler {
             });
             return true;
         } catch (Exception e) {
-            restoreResearchConfig(config, previousContent);
+            restoreResearchConfig(config, previousContent[0]);
             plugin.getLogger().log(Level.WARNING, "Failed to save Researches.yml via web editor", e);
             return false;
         }
@@ -399,30 +400,6 @@ public class ResearchApiHandler implements HttpHandler {
         }
     }
 
-    private void applyResearchUpdate(String json, Config config) {
-        String fullKey = extractJsonString(json, "fullKey"); if (fullKey == null) return;
-        String[] parts = fullKey.split(":", 2);
-        String ns = parts.length > 1 ? parts[0] : "slimefun", k = parts.length > 1 ? parts[1] : parts[0];
-        String path = ns + "." + k;
-
-        Integer lv = extractJsonInt(json, "levelCost"); if (lv != null) config.setValue(path + ".levelCost", lv);
-        Integer mc = extractJsonInt(json, "moneyCost"); if (mc != null) config.setValue(path + ".moneyCost", mc);
-        Boolean en = extractJsonBoolean(json, "enabled"); if (en != null) config.setValue(path + ".enabled", en);
-        List<String> ni = extractJsonStringArray(json, "needUnlockedItems"); if (ni != null) config.setValue(path + ".need-unlocked-items", ni);
-
-        setIfInt(config, path + ".miningLevelNeed", extractJsonInt(json, "miningLevelNeed"));
-        setIfInt(config, path + ".farmingLevelNeed", extractJsonInt(json, "farmingLevelNeed"));
-        setIfInt(config, path + ".foragingLevelNeed", extractJsonInt(json, "foragingLevelNeed"));
-        setIfInt(config, path + ".fishingLevelNeed", extractJsonInt(json, "fishingLevelNeed"));
-        setIfInt(config, path + ".excavationLevelNeed", extractJsonInt(json, "excavationLevelNeed"));
-        setIfInt(config, path + ".archeryLevelNeed", extractJsonInt(json, "archeryLevelNeed"));
-        setIfInt(config, path + ".defenseLevelNeed", extractJsonInt(json, "defenseLevelNeed"));
-        setIfInt(config, path + ".fightingLevelNeed", extractJsonInt(json, "fightingLevelNeed"));
-        setIfInt(config, path + ".agilityLevelNeed", extractJsonInt(json, "agilityLevelNeed"));
-        setIfInt(config, path + ".enchantingLevelNeed", extractJsonInt(json, "enchantingLevelNeed"));
-        setIfInt(config, path + ".alchemyLevelNeed", extractJsonInt(json, "alchemyLevelNeed"));
-    }
-
     private void applyResearchUpdate(ResearchUpdate update, Config config) {
         String[] parts = update.fullKey.split(":", 2);
         String ns = parts.length > 1 ? parts[0] : "slimefun", k = parts.length > 1 ? parts[1] : parts[0];
@@ -457,65 +434,6 @@ public class ResearchApiHandler implements HttpHandler {
 
     private static JsonArray jsonArray(JsonObject obj, String key) {
         return obj.has(key) && obj.get(key).isJsonArray() ? obj.getAsJsonArray(key) : null;
-    }
-
-    private static void setIfInt(Config config, String path, Integer v) { if (v != null) config.setValue(path, v); }
-
-    private static String extractJsonString(String json, String key) {
-        String s = "\"" + key + "\":\""; int idx = json.indexOf(s);
-        if (idx < 0) return null;
-        int start = idx + s.length(); StringBuilder sb = new StringBuilder();
-        for (int i = start; i < json.length(); i++) {
-            char ch = json.charAt(i);
-            if (ch == '\\' && i + 1 < json.length()) {
-                char nx = json.charAt(i + 1);
-                switch (nx) { case '"': sb.append('"'); i++; break; case '\\': sb.append('\\'); i++; break; case 'n': sb.append('\n'); i++; break; case 'r': sb.append('\r'); i++; break; case 't': sb.append('\t'); i++; break; default: sb.append(ch); break; }
-            } else if (ch == '"') break; else sb.append(ch);
-        }
-        return sb.toString();
-    }
-
-    private static Integer extractJsonInt(String json, String key) {
-        String s = "\"" + key + "\":"; int idx = json.indexOf(s); if (idx < 0) return null;
-        idx += s.length(); if (idx + 4 <= json.length() && json.regionMatches(idx, "null", 0, 4)) return null;
-        StringBuilder sb = new StringBuilder();
-        for (int i = idx; i < json.length(); i++) { char ch = json.charAt(i); if ((ch >= '0' && ch <= '9') || ch == '-') sb.append(ch); else break; }
-        if (sb.length() == 0) return null;
-        try { return Integer.parseInt(sb.toString()); } catch (NumberFormatException e) { return null; }
-    }
-
-    private static Boolean extractJsonBoolean(String json, String key) {
-        String s = "\"" + key + "\":"; int idx = json.indexOf(s); if (idx < 0) return null;
-        idx += s.length(); if (idx + 4 <= json.length() && json.regionMatches(idx, "true", 0, 4)) return true;
-        if (idx + 5 <= json.length() && json.regionMatches(idx, "false", 0, 5)) return false; return null;
-    }
-
-    private static List<String> extractJsonStringArray(String json, String key) {
-        String s = "\"" + key + "\":["; int idx = json.indexOf(s); if (idx < 0) return null;
-        int start = idx + s.length(); List<String> list = new ArrayList<>();
-        for (int i = start; i < json.length(); i++) {
-            char ch = json.charAt(i); if (ch == ']') break;
-            if (ch == '"') { StringBuilder sb = new StringBuilder(); i++;
-                while (i < json.length()) {
-                    if (json.charAt(i) == '\\' && i + 1 < json.length()) {
-                        char nx = json.charAt(i + 1);
-                        if (nx == '"') { sb.append('"'); i++; }
-                        else if (nx == '\\') { sb.append('\\'); i++; }
-                        else if (nx == 'n') { sb.append('\n'); i++; }
-                        else if (nx == 'r') { sb.append('\r'); i++; }
-                        else if (nx == 't') { sb.append('\t'); i++; }
-                        else sb.append(json.charAt(i));
-                    } else if (json.charAt(i) == '"') break; else sb.append(json.charAt(i));
-                    i++;
-                }
-                list.add(sb.toString());
-            }
-        }
-        return list;
-    }
-
-    private static int skipJsonString(String s, int i) {
-        i++; while (i < s.length()) { if (s.charAt(i) == '\\' && i + 1 < s.length()) i += 2; else if (s.charAt(i) == '"') break; else i++; } return i;
     }
 
     private static void appendString(StringBuilder sb, String key, String value) {

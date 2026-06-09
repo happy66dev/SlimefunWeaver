@@ -255,9 +255,9 @@ var itemToResearch = {};
 var dirty = false, savingResearches = false, dirtyVersion = 0;
 function markDirty(){dirtyVersion++;if(!dirty){dirty=true;if(!savingResearches){var btn=document.getElementById('btn-save-researches');if(btn)btn.textContent='💾 保存 *'}}}
 function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}}
-function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;").replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function stripNS(fk) { var p = fk.split(":"); return p.length > 1 ? p.slice(1).join(":") : p[0]; }
-function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r')}
+function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function apiToInternal(apiJson) {
   itemToResearch = apiJson.itemToResearch || {};
   var list = (apiJson.researches || []).map(function(r) {

@@ -755,8 +755,12 @@ public class RecipeApiHandler implements HttpHandler {
 
         void restore(SlimefunItem item) {
             item.setRecipeType(type);
-            item.setRecipe(recipe == null ? null : Arrays.stream(recipe).map(stack -> stack == null ? null : stack.clone()).toArray(ItemStack[]::new));
-            item.setRecipeOutput(output == null ? null : output.clone());
+            if (recipe != null && recipe.length == 9) {
+                item.setRecipe(Arrays.stream(recipe).map(stack -> stack == null ? null : stack.clone()).toArray(ItemStack[]::new));
+            }
+            if (output != null) {
+                item.setRecipeOutput(output.clone());
+            }
             if (processingTime > 0) {
                 try {
                     Method setProcessingTime = item.getClass().getMethod("setProcessingTime", int.class);

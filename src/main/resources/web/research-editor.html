@@ -309,14 +309,14 @@ function buildResearchList(filter){
     if(filter){var f=filter.toLowerCase(),mk=r.key.toLowerCase().indexOf(f)>=0,mn=r.name.toLowerCase().indexOf(f)>=0,mi=r.items.some(function(it){return it.id.toLowerCase().indexOf(f)>=0||it.name.toLowerCase().indexOf(f)>=0});if(!mk&&!mn&&!mi)return}
     var isNew=unsaved.newResearches.has(r.key);
     var tags='',ms=4;
-    if(r.items.length>ms){tags=r.items.slice(0,ms).map(function(it){return'<span class="r-tag">'+MC.escapeHtml(it.name)+'</span>'}).join('')+'<span class="r-tag">+'+ (r.items.length-ms)+'</span>'}
-    else tags=r.items.map(function(it){return'<span class="r-tag">'+MC.escapeHtml(it.name)+'</span>'}).join('');
+    if(r.items.length>ms){tags=r.items.slice(0,ms).map(function(it){return'<span class="r-tag">'+MC.parseToHtml(it.name)+'</span>'}).join('')+'<span class="r-tag">+'+ (r.items.length-ms)+'</span>'}
+    else tags=r.items.map(function(it){return'<span class="r-tag">'+MC.parseToHtml(it.name)+'</span>'}).join('');
     var st='<div class="r-status">';
     st+=r.parents.length>0?'<span class="r-status-tag has-parents-bg">前置:'+r.parents.length+'</span>':'<span class="r-status-tag no-parents-bg">根</span>';
     st+=r.descendants.length>0?'<span class="r-status-tag has-children-bg">后代:'+r.descendants.length+'</span>':'<span class="r-status-tag no-children-bg">叶</span>';
     st+='</div>';
     h+='<div class="r-item'+(selectedResearch&&selectedResearch.key===r.key?' active':'')+(isNew?' unsaved':'')+'" data-key="'+escapeKey(r.key)+'" onclick="selectResearch(\''+escapeKey(r.key)+'\')">'
-      +'<div class="r-name">'+(isNew?'🟢 ':'')+MC.escapeHtml(r.name)+'</div>'
+      +'<div class="r-name">'+(isNew?'🟢 ':'')+MC.parseToHtml(r.name)+'</div>'
       +'<div class="r-key">'+MC.escapeHtml(r.shortKey||r.key)+' | Lv.'+r.levelCost+'</div>'
       +'<div class="r-items-wrap">'+tags+'</div>'+st+'</div>';
   });
@@ -333,8 +333,8 @@ function selectResearch(key){
 function renderCenterTop(){
   var grid=document.getElementById('items-grid'),empty=document.getElementById('ct-empty'),title=document.getElementById('ct-section-title');
   if(!selectedResearch){grid.innerHTML='';empty.style.display='flex';title.innerHTML='📦 请选择左侧研究';return}
-  empty.style.display='none';title.innerHTML='📦 <span style="color:#e94560;">'+MC.escapeHtml(selectedResearch.name)+'</span> ('+selectedResearch.items.length+'个)';
-  var h='';selectedResearch.items.forEach(function(it){h+='<div class="item-cell"><span class="item-icon">📦</span><span class="item-name">'+MC.escapeHtml(it.name)+'</span><span class="item-id">'+MC.escapeHtml(it.id)+'</span></div>'});
+  empty.style.display='none';title.innerHTML='📦 <span style="color:#e94560;">'+MC.parseToHtml(selectedResearch.name)+'</span> ('+selectedResearch.items.length+'个)';
+  var h='';selectedResearch.items.forEach(function(it){h+='<div class="item-cell"><span class="item-icon">📦</span><span class="item-name">'+MC.parseToHtml(it.name)+'</span><span class="item-id">'+MC.escapeHtml(it.id)+'</span></div>'});
   grid.innerHTML=h;
 }
 function renderRightPanel(){
@@ -360,9 +360,9 @@ function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsD
 function onSkillChange(input){if(!selectedResearch||savingResearches)return;selectedResearch.skills[input.getAttribute('data-sk')]=Math.max(0,parseInt(input.value)||0);input.value=selectedResearch.skills[input.getAttribute('data-sk')];markDirty();renderYamlPreview();renderGraph();showToast('技能已更新','info')}
 function renderDeps(){
     document.getElementById('parents-count').textContent=selectedResearch.parents.length;
-    var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="event.stopPropagation();removeParentDependency(\''+escapeKey(pk)+'\')">&times;</span></div>'});
+    var ph='';selectedResearch.parents.forEach(function(pk){var p=researches.find(function(r){return r.key===pk});ph+='<div class="dep-item"><span class="dep-name">'+MC.parseToHtml(p?p.name:pk)+' ('+MC.escapeHtml(pk)+')</span><span style="color:#f85149;cursor:pointer;font-size:13px" onclick="event.stopPropagation();removeParentDependency(\''+escapeKey(pk)+'\')">&times;</span></div>'});
     document.getElementById('parents-list').innerHTML=ph||'<div style="font-size:10px;color:#484f58;">无</div>';
-    var ch='';selectedResearch.descendants.forEach(function(dk){var d=researches.find(function(r){return r.key===dk});ch+='<div class="dep-item"><span class="dep-name">'+MC.escapeHtml(d?d.name:dk)+' ('+MC.escapeHtml(dk)+')</span><span style="color:#484f58;font-size:9px">→ 需本项</span></div>'});
+    var ch='';selectedResearch.descendants.forEach(function(dk){var d=researches.find(function(r){return r.key===dk});ch+='<div class="dep-item"><span class="dep-name">'+MC.parseToHtml(d?d.name:dk)+' ('+MC.escapeHtml(dk)+')</span><span style="color:#484f58;font-size:9px">→ 需本项</span></div>'});
     document.getElementById('children-list').innerHTML=ch||'<div style="font-size:10px;color:#484f58;">无</div>';
   }
   function removeParentDependency(pk){
@@ -403,7 +403,7 @@ function renderDeps(){
           var alreadyIn=selectedResearch&&selectedResearch.items.some(function(si){return si.id===it.id});
           h+='<div style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+'" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
       +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
-            +' <span style="color:#c9d1d9">'+MC.escapeHtml(it.name||'')+'</span>'
+            +' <span style="color:#c9d1d9">'+MC.parseToHtml(it.name||'')+'</span>'
             +(alreadyIn?' <span style="color:#3fb950;font-size:9px">✓已添加</span>':'')
       +'</div>';
         });
@@ -421,7 +421,7 @@ function renderYamlPreview(){
   h.push('    <span class="yaml-key">need-unlocked-items:</span> <span class="yaml-val">['+ni.join(', ')+']</span>');
   skillsDef.forEach(function(sk){h.push('    <span class="yaml-key">'+sk.key+'LevelNeed:</span> <span class="yaml-val">'+(r.skills[sk.key]||0)+'</span>')});
   h.push('');h.push('<span class="yaml-comment"># languages/zh-CN/researches.yml</span><span class="yaml-key">slimefun:</span>');
-  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span> <span class="yaml-val">'+MC.escapeHtml(r.name)+'</span>');
+  h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span> <span class="yaml-val">'+MC.parseToHtml(r.name)+'</span>');
   document.getElementById('yaml-preview').innerHTML=h.join('\n');
 }
 
@@ -483,11 +483,11 @@ function renderGraph(){
       else if(cl.yellow.has(r.key))relC=' related-yellow';
       else if(cl.sky.has(r.key))relC=' related-sky';
     }
-    var itemNames=r.items.map(function(it){return MC.escapeHtml(it.name)});
+    var itemNames=r.items.map(function(it){return MC.parseToHtml(it.name)});
     var itemH=itemNames.slice(0,4).map(function(n){return'<div class="gn-item">'+n+'</div>'}).join('');
     if(itemNames.length>4)itemH+='<div class="gn-item-more">...+'+(itemNames.length-4)+'个</div>';
     h+='<div class="gnode'+(isSel?' selected':'')+relC+'" style="left:'+r.x+'px;top:'+r.y+'px" data-key="'+escapeKey(r.key)+'" onclick="selectResearch(\''+escapeKey(r.key)+'\')">'
-      +'<div class="gn-hdr"><span>'+MC.escapeHtml(r.name)+'</span><span class="gn-key">'+MC.escapeHtml(r.shortKey||r.key)+'</span></div>'
+      +'<div class="gn-hdr"><span>'+MC.parseToHtml(r.name)+'</span><span class="gn-key">'+MC.escapeHtml(r.shortKey||r.key)+'</span></div>'
       +'<div class="gn-body">'+itemH+'</div>'
       +'<div class="gn-port gn-port-in" data-node="'+escapeKey(r.key)+'" title="拖到这里"></div>'
       +'<div class="gn-port gn-port-out" data-node="'+escapeKey(r.key)+'" title="拖拽连线" onmousedown="startDragConnect(event,\''+escapeKey(r.key)+'\')"></div></div>';
@@ -545,7 +545,9 @@ window.addEventListener('mouseup',function(e){
     if(from&&to&&from.descendants.indexOf(toKey)<0&&to.parents.indexOf(dragConnect.fromKey)<0){
       function hasPath(s,t,vis){if(!vis)vis=new Set();if(vis.has(s))return false;vis.add(s);if(s===t)return true;var r=researches.find(function(rr){return rr.key===s});if(!r)return false;return r.descendants.some(function(dk){return hasPath(dk,t,vis)})}
       if(!hasPath(toKey,dragConnect.fromKey)){from.descendants.push(toKey);to.parents.push(dragConnect.fromKey);unsaved.newDeps.add(dragConnect.fromKey+'\u2192'+toKey);markDirty();
-        autoLayout();buildResearchList(document.getElementById('research-search').value);if(selectedResearch&&(selectedResearch.key===dragConnect.fromKey||selectedResearch.key===toKey)){renderRightPanel();autoScrollToNode(selectedResearch.key)}
+        var savedScale=graphScale,savedOX=graphOffsetX,savedOY=graphOffsetY;
+        autoLayout();graphScale=savedScale;graphOffsetX=savedOX;graphOffsetY=savedOY;applyTransform();
+        buildResearchList(document.getElementById('research-search').value);if(selectedResearch&&(selectedResearch.key===dragConnect.fromKey||selectedResearch.key===toKey)){renderRightPanel();autoScrollToNode(selectedResearch.key)}
         showToast('🟢 新依赖: '+from.name+' → '+to.name,'success')}else showToast('⚠ 循环依赖','info')}}
   dragConnect={active:false,fromKey:null,fromPortX:0,fromPortY:0}
 });

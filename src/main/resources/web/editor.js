@@ -126,10 +126,10 @@ var Dialog = {
   },
   prompt: function(msg, defVal, cb) {
     Dialog._init();
-    Dialog._overlay.innerHTML = '<div class="modal-box"><div class="modal-header"><span>' + msg + '</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body"><input type="text" id="dialog-input" value="' + (defVal||'').replace(/"/g,'&quot;') + '" autofocus></div><div class="modal-footer"><button class="btn btn-sm" onclick="Dialog.close()">取消</button><button class="btn btn-primary btn-sm" id="dialog-ok-btn">确定</button></div></div>';
+    Dialog._overlay.innerHTML = '<div class="modal-box"><div class="modal-header"><span>' + msg + '</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body"><input type="text" id="dialog-input" autofocus></div><div class="modal-footer"><button class="btn btn-sm" onclick="Dialog.close()">取消</button><button class="btn btn-primary btn-sm" id="dialog-ok-btn">确定</button></div></div>';
     Dialog._overlay.style.display = 'flex';
     var input = document.getElementById('dialog-input');
-    input.focus(); input.select();
+    input.value = defVal || ''; input.focus(); input.select();
     var ok = function() { var v = input.value.trim(); Dialog.close(); if (cb) cb(v); };
     document.getElementById('dialog-ok-btn').onclick = ok;
     input.onkeydown = function(e) { if (e.key === 'Enter') ok(); };
@@ -914,8 +914,9 @@ async function doSearch() {
     if (results.length > 0) {
       results.forEach(function(r) {
         var typeClass = r.type === 'VANILLA' ? 'vanilla' : (r.type === 'HEAD' ? 'head' : 'slimefun');
-        var safeId = (r.id || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += '<div class="picker-item" onclick="pickMaterial(\'' + r.type + '\',\'' + safeId + '\')">' +
+        var safeType = (r.type || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+        var safeId = (r.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        html += '<div class="picker-item" onclick="pickMaterial(\'' + safeType + '\',\'' + safeId + '\')">' +
           '<span class="item-type ' + typeClass + '">' + r.type + '</span>' +
           '<span>' + MC.parseToHtml(r.display || r.id) + '</span>' +
           '<span class="item-id">' + MC.escapeHtml(r.id) + '</span>' +

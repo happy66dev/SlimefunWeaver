@@ -137,9 +137,9 @@ public class WebApiHandler implements HttpHandler {
         exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=UTF-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(200, bytes.length);
-        OutputStream os = exchange.getResponseBody();
-        os.write(bytes);
-        os.close();
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
     }
 
     private void handleCategories(HttpExchange exchange, String method) throws IOException {

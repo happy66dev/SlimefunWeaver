@@ -267,6 +267,7 @@ function addRecipe() {
 function deleteRecipe(idx) {
   if (recipesData.length <= 1) { showToast('至少保留一个配方','info'); return; }
   if (idx < 0 || idx >= recipesData.length) return;
+  saveCurrentRecipeState();
   recipesData.splice(idx, 1);
   if (recipeIndex >= recipesData.length) recipeIndex = recipesData.length - 1;
   loadRecipeState(recipeIndex);

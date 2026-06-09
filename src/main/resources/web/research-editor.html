@@ -253,7 +253,7 @@ var MC={
 var researches = [];
 var itemToResearch = {};
 var dirty = false, savingResearches = false, dirtyVersion = 0;
-function markDirty(){dirty=true;dirtyVersion++;var btn=document.getElementById('btn-save-researches');if(btn&&!savingResearches)btn.textContent='💾 保存 *'}
+function markDirty(){if(savingResearches)return;dirty=true;dirtyVersion++;var btn=document.getElementById('btn-save-researches');if(btn&&!savingResearches)btn.textContent='💾 保存 *'}
 function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}}
 function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function stripNS(fk) { var p = fk.split(":"); return p.length > 1 ? p.slice(1).join(":") : p[0]; }

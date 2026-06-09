@@ -929,6 +929,7 @@ async function doSearch() {
 }
 
 function pickMaterial(type, id) {
+  if (state.saving) { closePicker(); return; }
   if (state.pickerTarget === 'icon') {
     if (state.selectedNode && state.selectedNode.type !== 'ITEM') {
       state.selectedNode.icon = { type: type, id: id };

@@ -212,7 +212,7 @@ function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key
 
 function loadAll() {
   dlog('INIT', 'loadAll: fetching /api/recipes');
-  fetch('/api/recipes').then(function(r){return r.json()}).then(function(json){
+  return fetch('/api/recipes').then(function(r){return r.json()}).then(function(json){
     itemData = json.items || {};
     recipeTypes = json.recipeTypes || [];
     itemNames = json.names || {};

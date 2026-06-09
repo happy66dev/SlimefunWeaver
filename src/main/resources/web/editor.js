@@ -977,7 +977,6 @@ async function saveAll() {
   var btn = $('btn-save');
   btn.disabled = true;
   btn.innerHTML = '<span class="btn-icon">\u23f3</span> 保存中...';
-  updateSaveStatus();
   $('save-status').textContent = '保存中...';
   $('save-status').className = 'save-status saving';
 

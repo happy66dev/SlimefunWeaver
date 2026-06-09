@@ -26,6 +26,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
+import io.github.thebusybiscuit.slimefun4.core.multiblocks.MultiBlockMachine;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -630,40 +631,48 @@ public class RecipeApiHandler implements HttpHandler {
             List<Map<?, ?>> recipes = parsed.recipes;
             if (recipes == null || recipes.isEmpty()) continue;
 
-            Map<?, ?> first = recipes.get(0);
-            String typeKey = String.valueOf(first.get("type"));
-            RecipeType rt = findRecipeTypeByKey(typeKey, resolved);
-            if (rt == null) continue;
+            boolean isFirstRecipe = true;
+            for (Map<?, ?> recipeMap : recipes) {
+                String typeKey = String.valueOf(recipeMap.get("type"));
+                if (isNullRecipeType(typeKey)) continue;
+                RecipeType rt = findRecipeTypeByKey(typeKey, resolved);
+                if (rt == null) continue;
 
-            Object inputObj = first.get("input");
-            if (!(inputObj instanceof List)) continue;
-            List<?> inputList = (List<?>) inputObj;
-            Object outputVal = first.get("output");
-            int outputAmount = clamp(toInt(first.get("output-amount"), 1), 1, 64);
+                Object inputObj = recipeMap.get("input");
+                if (!(inputObj instanceof List)) continue;
+                List<?> inputList = (List<?>) inputObj;
+                Object outputVal = recipeMap.get("output");
+                int outputAmount = clamp(toInt(recipeMap.get("output-amount"), 1), 1, 64);
 
-            ItemStack[] inputStacks = new ItemStack[inputList.size()];
-            for (int i = 0; i < inputList.size(); i++) {
-                String matId = String.valueOf(inputList.get(i));
-                inputStacks[i] = resolveItemStack(matId);
-            }
-
-            String outId = outputVal != null ? String.valueOf(outputVal) : itemId;
-            ItemStack outputStack = resolveItemStack(outId);
-            outputStack.setAmount(outputAmount);
-
-            item.setRecipeType(rt);
-            item.setRecipe(inputStacks);
-            item.setRecipeOutput(outputStack);
-
-            int processingTime = toInt(first.get("processing-time"), 0);
-            if (processingTime > 0 && TIMED_RECIPE_TYPES.contains(typeKey)) {
-                try {
-                    Method setProcessingTime = item.getClass().getMethod("setProcessingTime", int.class);
-                    setProcessingTime.invoke(item, processingTime);
-                } catch (NoSuchMethodException ignored) {
-                } catch (Exception e) {
-                    plugin.getLogger().log(Level.WARNING, "Failed to set processing time for " + itemId, e);
+                ItemStack[] inputStacks = new ItemStack[inputList.size()];
+                for (int i = 0; i < inputList.size(); i++) {
+                    String matId = String.valueOf(inputList.get(i));
+                    inputStacks[i] = resolveItemStack(matId);
                 }
+
+                String outId = outputVal != null ? String.valueOf(outputVal) : itemId;
+                ItemStack outputStack = resolveItemStack(outId);
+                outputStack.setAmount(outputAmount);
+
+                if (isFirstRecipe) {
+                    item.setRecipeType(rt);
+                    item.setRecipe(inputStacks);
+                    item.setRecipeOutput(outputStack);
+                    isFirstRecipe = false;
+
+                    int processingTime = toInt(recipeMap.get("processing-time"), 0);
+                    if (processingTime > 0 && TIMED_RECIPE_TYPES.contains(typeKey)) {
+                        try {
+                            Method setProcessingTime = item.getClass().getMethod("setProcessingTime", int.class);
+                            setProcessingTime.invoke(item, processingTime);
+                        } catch (NoSuchMethodException ignored) {
+                        } catch (Exception e) {
+                            plugin.getLogger().log(Level.WARNING, "Failed to set processing time for " + itemId, e);
+                        }
+                    }
+                }
+
+                rt.register(inputStacks, outputStack);
             }
         }
 
@@ -682,6 +691,51 @@ public class RecipeApiHandler implements HttpHandler {
             SlimefunItem item = IconParser.findSlimefunItem(entry.getKey());
             if (item != null) entry.getValue().restore(item);
         }
+        rebuildMachineRecipesFromOriginals();
+    }
+
+    private static void rebuildMachineRecipesFromOriginals() {
+        Map<MultiBlockMachine, List<ItemStack[]>> toRebuild = new LinkedHashMap<>();
+        ConfigurationSection root = storedRecipes != null ? storedRecipes.getConfigurationSection("slimefun") : null;
+
+        for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
+            if (root != null && root.contains(entry.getKey())) continue;
+            SlimefunItem item = IconParser.findSlimefunItem(entry.getKey());
+            if (item == null || item.getRecipe() == null) continue;
+            String machineId = getRecipeTypeMachineId(entry.getValue().type);
+            if (machineId == null) continue;
+            SlimefunItem mItem = SlimefunItem.getById(machineId);
+            if (mItem instanceof MultiBlockMachine) {
+                MultiBlockMachine mbm = (MultiBlockMachine) mItem;
+                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(item.getRecipe());
+                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{item.getRecipeOutput()});
+            }
+        }
+        for (MultiBlockMachine mbm : toRebuild.keySet()) {
+            mbm.clearRecipe();
+        }
+        for (Map.Entry<MultiBlockMachine, List<ItemStack[]>> entry : toRebuild.entrySet()) {
+            List<ItemStack[]> recs = entry.getValue();
+            for (int i = 0; i < recs.size(); i += 2) {
+                entry.getKey().addRecipe(recs.get(i), recs.get(i + 1)[0]);
+            }
+        }
+    }
+
+    private static Field recipeTypeMachineField;
+
+    private static String getRecipeTypeMachineId(RecipeType rt) {
+        if (recipeTypeMachineField == null) {
+            try {
+                recipeTypeMachineField = RecipeType.class.getDeclaredField("machine");
+                recipeTypeMachineField.setAccessible(true);
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "Failed to access RecipeType.machine field", e);
+                return null;
+            }
+        }
+        try { return (String) recipeTypeMachineField.get(rt); }
+        catch (Exception e) { return null; }
     }
 
     private static class RecipeSnapshot {

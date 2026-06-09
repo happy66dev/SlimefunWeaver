@@ -669,6 +669,7 @@ function addCategory() {
 }
 
 function addPlaceholder() {
+  if (state.saving) return;
   if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
   if (state.selectedCategory === null) { Toast.show('根级别不能添加占位物品，请选择子分类', 'warning'); return; }
   var slot = findEmptySlot();
@@ -786,11 +787,12 @@ function showContextMenu(x, y, item) {
 }
 
 function moveToPage() {
+  if (state.saving) { var cm2 = $('context-menu'); if (cm2) cm2.style.display = 'none'; return; }
   var item = $('context-menu')._targetItem;
   $('context-menu').style.display = 'none';
   if (!item) return;
   Dialog.prompt('移动到第几页？', (item.page || 1) + '', function(pageStr) {
-    if (!pageStr) return;
+    if (!pageStr || state.saving) return;
     var newPage = parseInt(pageStr);
     if (isNaN(newPage) || newPage < 1) { Toast.show('请输入有效的页码', 'warning'); return; }
     var used = {};

@@ -501,7 +501,12 @@ public class RecipeApiHandler implements HttpHandler {
             return false;
         }
         YamlConfiguration previousRecipes = storedRecipes;
-        String previousContent = finalFile.exists() ? YamlConfiguration.loadConfiguration(finalFile).saveToString() : null;
+        String previousContent = null;
+        if (finalFile.exists()) {
+            try {
+                previousContent = new String(java.nio.file.Files.readAllBytes(finalFile.toPath()), StandardCharsets.UTF_8);
+            } catch (IOException e) { plugin.getLogger().log(Level.WARNING, "Failed to read Recipes.yml for rollback backup", e); }
+        }
 
         try {
             java.nio.file.Files.move(tempFile.toPath(), finalFile.toPath(),
@@ -516,9 +521,9 @@ public class RecipeApiHandler implements HttpHandler {
             }
         }
 
-        storedRecipes = yaml;
         try {
             runSync(RecipeApiHandler::applyAllRecipes);
+            storedRecipes = yaml;
         } catch (Exception e) {
             storedRecipes = previousRecipes;
             restoreRecipesFile(finalFile, previousContent);

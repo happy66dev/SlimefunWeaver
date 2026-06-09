@@ -176,6 +176,7 @@ async function loadCategories() {
 }
 
 async function discardChanges() {
+  if (state.saving) { Toast.show('正在保存，请稍后再放弃修改', 'info'); return; }
   Dialog.confirm('放弃所有未保存的修改？此操作会从服务器重新加载配置。', function(ok) {
     if (!ok) return;
     loadCategories().then(function(ok) {

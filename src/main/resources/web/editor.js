@@ -142,12 +142,13 @@ var Dialog = {
 
 var state = {
   categories: [], selectedCategory: null, selectedNode: null,
-  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all', saving: false, dirtyVersion: 0
+  currentPage: 1, pickerTarget: null, dirty: false, pickerFilter: 'all', saving: false, dirtyVersion: 0, reloading: false
 };
 
 function $(id) { return document.getElementById(id); }
 
 function markDirty() {
+  if (state.reloading) return;
   state.dirtyVersion++;
   if (!state.dirty) { state.dirty = true; updateSaveStatus(); }
 }
@@ -179,11 +180,13 @@ async function discardChanges() {
   if (state.saving) { Toast.show('正在保存，请稍后再放弃修改', 'info'); return; }
   Dialog.confirm('放弃所有未保存的修改？此操作会从服务器重新加载配置。', function(ok) {
     if (!ok) return;
+    state.reloading = true;
     loadCategories().then(function(ok) {
-      if (!ok) return;
+      if (!ok) { state.reloading = false; return; }
       state.selectedCategory = null;
       state.selectedNode = null;
       state.currentPage = 1;
+      state.reloading = false;
       renderGrid();
       renderEditor();
       Toast.show('已从服务器重新加载', 'info');
@@ -958,8 +961,8 @@ function nextPage() { var max = getMaxPage(); if (state.currentPage < max) { sta
 async function saveAll() {
   if (state.saving) return;
   state.saving = true;
-  var savingDirtyVersion = state.dirtyVersion;
   syncCurrentSelection();
+  var savingDirtyVersion = state.dirtyVersion;
   var btn = $('btn-save');
   btn.disabled = true;
   btn.innerHTML = '<span class="btn-icon">\u23f3</span> 保存中...';

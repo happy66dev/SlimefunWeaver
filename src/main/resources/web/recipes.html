@@ -398,6 +398,7 @@ function renderTypeList() {
 }
 
 function changeType(key) {
+  if (saving) return;
   dlog('CHANGE', 'changeType: ' + currentTypeKey + ' -> ' + key);
   currentTypeKey = key;
   var info = getTypeInfo(key);
@@ -418,6 +419,7 @@ function trimOverflowSlots() {
 }
 
 function changeTime(val) {
+  if (saving) return;
   var t = parseInt(val) || 0;
   processingTime = Math.max(0, t);
   dlog('CHANGE', 'changeTime: ' + processingTime + ' tick');
@@ -427,6 +429,7 @@ function changeTime(val) {
 }
 
 function openSlotPicker(idx) {
+  if (saving) return;
   pickerTarget = 'slot'; pickerSlotIdx = idx;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
@@ -434,6 +437,7 @@ function openSlotPicker(idx) {
 }
 
 function openPicker(target) {
+  if (saving) return;
   pickerTarget = target; pickerSlotIdx = -1;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
@@ -479,6 +483,7 @@ function renderPopupList() {
 }
 
 function pickMaterial(id, name) {
+  if (saving) { closePicker(); return; }
   dlog('PICKER', 'pickMaterial: ' + id + ' target=' + pickerTarget + ' slotIdx=' + pickerSlotIdx);
   if (pickerTarget === 'output') {
     outputItemId = id; outputItemName = name;
@@ -497,6 +502,7 @@ function closePicker() {
 }
 
 function changeAmount(d) {
+  if (saving) return;
   amount = Math.max(1, Math.min(64, amount + d));
   $id('amount-display').textContent = amount;
   renderGrid();
@@ -553,14 +559,12 @@ function revertItem() {
 function revertFromServer() {
   if (saving) { showToast('正在保存，请稍后再重新加载','info'); return; }
   dlog('REVERT', 'revertFromServer: full reload from server');
-  setDirty(false);
   selectedItemId = null;
   $id('right-panel').style.display = 'none';
   $id('center-empty').style.display = 'block';
   $id('center-panel').style.display = 'none';
   $id('center-panel').innerHTML = '';
-  loadAll();
-  showToast('已从服务器重新加载','success');
+  loadAll().then(function() { setDirty(false); showToast('已从服务器重新加载','success'); });
 }
 
 function save() {

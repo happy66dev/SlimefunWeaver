@@ -973,7 +973,13 @@ function nextPage() { var max = getMaxPage(); if (state.currentPage < max) { sta
 async function saveAll() {
   if (state.saving || state.reloading) return;
   state.saving = true;
-  syncCurrentSelection();
+  try {
+    syncCurrentSelection();
+  } catch (e) {
+    state.saving = false;
+    Toast.show('保存失败', 'error');
+    return;
+  }
   var savingDirtyVersion = state.dirtyVersion;
   var btn = $('btn-save');
   btn.disabled = true;

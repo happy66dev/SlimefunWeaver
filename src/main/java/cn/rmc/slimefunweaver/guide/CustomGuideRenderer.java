@@ -269,6 +269,7 @@ public class CustomGuideRenderer {
                 colored.add(ChatColor.translateAlternateColorCodes('&', line));
             }
             if (!colored.isEmpty()) meta.setLore(colored);
+            else meta.setLore(null);
         });
     }
 
@@ -370,6 +371,8 @@ public class CustomGuideRenderer {
                 List<String> colored = new ArrayList<>();
                 for (String line : finalLore) colored.add(ChatColor.translateAlternateColorCodes('&', line));
                 meta.setLore(colored);
+            } else {
+                meta.setLore(null);
             }
         });
     }

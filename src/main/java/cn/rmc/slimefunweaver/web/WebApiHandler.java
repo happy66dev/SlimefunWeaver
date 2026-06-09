@@ -464,7 +464,7 @@ public class WebApiHandler implements HttpHandler {
 
         if (typeFilter.isEmpty() || typeFilter.equals("VANILLA")) {
             for (Material mat : Material.values()) {
-                if (mat.isItem() && mat.name().toLowerCase().contains(q)) {
+                if (mat.isItem() && (mat.name().toLowerCase().contains(q) || VanillaMaterialLocalization.getItemName(mat).toLowerCase().contains(q))) {
                     if (!first) sb.append(',');
                     sb.append("{\"type\":\"VANILLA\",\"id\":\"").append(mat.name());
                     sb.append("\",\"display\":\"").append(JsonUtil.escape(VanillaMaterialLocalization.getItemName(mat))).append("\"}");

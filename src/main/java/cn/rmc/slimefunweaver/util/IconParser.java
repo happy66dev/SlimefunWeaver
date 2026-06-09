@@ -104,7 +104,14 @@ public final class IconParser {
         }
         SlimefunItem sfItem = findSlimefunItem(id);
         if (sfItem != null) {
-            return Optional.of(sfItem.getItem().clone());
+            ItemStack clone = sfItem.getItem().clone();
+            ItemMeta meta = clone.getItemMeta();
+            if (meta != null) {
+                meta.setLore(null);
+                meta.setDisplayName(null);
+                clone.setItemMeta(meta);
+            }
+            return Optional.of(clone);
         }
         logger.log(Level.WARNING, "Slimefun item not found: {0}", id);
         return Optional.empty();

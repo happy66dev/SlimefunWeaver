@@ -492,7 +492,7 @@ public class RecipeApiHandler implements HttpHandler {
             itemSec.set("recipes", entry.getValue());
         }
 
-        File tempFile = new File(plugin.getDataFolder(), "Recipes.yml.tmp");
+        File tempFile = new File(plugin.getDataFolder(), "Recipes.yml.tmp." + System.currentTimeMillis());
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
             writer.write(yaml.saveToString());
             writer.flush();
@@ -606,50 +606,6 @@ public class RecipeApiHandler implements HttpHandler {
     private static int jsonInt(JsonObject obj, String key, int fallback) {
         if (!obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return fallback;
         try { return obj.get(key).getAsInt(); } catch (Exception e) { return fallback; }
-    }
-
-    private void applyRecipeSave(String json, String itemId, ConfigurationSection parent) {
-        String recipesJson = extractJsonArray(json, "recipes");
-        if (recipesJson == null) return;
-
-        List<Map<String, Object>> recipeList = new ArrayList<>();
-
-        int depth = 0, objStart = -1;
-        for (int i = 0; i < recipesJson.length(); i++) {
-            char ch = recipesJson.charAt(i);
-            if (ch == '{') {
-                if (depth == 0) objStart = i;
-                depth++;
-            } else if (ch == '}') {
-                depth--;
-                if (depth == 0 && objStart >= 0) {
-                    String rj = recipesJson.substring(objStart, i + 1);
-                    Map<String, Object> map = new LinkedHashMap<>();
-                    String type = extractJsonStringSimple(rj, "type");
-                    if (isNullRecipeType(type)) {
-                        objStart = -1;
-                        continue;
-                    }
-                    if (type != null) map.put("type", type);
-                    List<String> input = extractJsonStringArray(rj, "input");
-                    if (input != null) map.put("input", input);
-                    String output = extractJsonStringSimple(rj, "output");
-                    if (output != null) map.put("output", output);
-                    Integer outAmt = extractJsonInt(rj, "outputAmount");
-                    map.put("output-amount", outAmt != null ? outAmt : 1);
-                    Integer time = extractJsonInt(rj, "processingTime");
-                    if (time != null && time > 0) map.put("processing-time", time);
-                    recipeList.add(map);
-                    objStart = -1;
-                }
-            } else if (ch == '"' && depth == 0) {
-                i = skipJsonString(recipesJson, i);
-            }
-        }
-        parent.set(itemId, null);
-        if (recipeList.isEmpty()) return;
-        ConfigurationSection itemSec = parent.createSection(itemId);
-        itemSec.set("recipes", recipeList);
     }
 
     private static void applyAllRecipes() {
@@ -860,77 +816,6 @@ public class RecipeApiHandler implements HttpHandler {
         return 1;
     }
 
-    private static String extractJsonArray(String json, String key) {
-        String s = "\"" + key + "\":["; int idx = json.indexOf(s);
-        if (idx < 0) return null;
-        int start = idx + s.length(), depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            char ch = json.charAt(i);
-            if (ch == '[') depth++;
-            else if (ch == ']') { if (depth == 0) return json.substring(start, i); depth--; }
-            else if (ch == '"') i = skipJsonString(json, i);
-        }
-        return null;
-    }
-
-    private static List<String> extractJsonStringArray(String json, String key) {
-        String s = "\"" + key + "\":["; int idx = json.indexOf(s);
-        if (idx < 0) return new ArrayList<>();
-        int start = idx + s.length(); List<String> list = new ArrayList<>();
-        for (int i = start; i < json.length(); i++) {
-            char ch = json.charAt(i); if (ch == ']') break;
-            if (ch == '"') { StringBuilder sb = new StringBuilder(); i++;
-                while (i < json.length()) {
-                    if (json.charAt(i) == '\\' && i + 1 < json.length()) {
-                        char nx = json.charAt(i + 1);
-                        if (nx == '"') { sb.append('"'); i++; } else if (nx == '\\') { sb.append('\\'); i++; }
-                        else sb.append(json.charAt(i));
-                    } else if (json.charAt(i) == '"') break; else sb.append(json.charAt(i));
-                    i++;
-                }
-                list.add(sb.toString());
-            }
-        }
-        return list;
-    }
-
-    private static String extractJsonStringSimple(String json, String key) {
-        String s = "\"" + key + "\":\""; int idx = json.indexOf(s);
-        if (idx < 0) return null;
-        int start = idx + s.length(); StringBuilder sb = new StringBuilder();
-        for (int i = start; i < json.length(); i++) {
-            char ch = json.charAt(i);
-            if (ch == '\\' && i + 1 < json.length()) {
-                i++;
-                char nx = json.charAt(i);
-                if (nx == '"') sb.append('"');
-                else if (nx == '\\') sb.append('\\');
-                else if (nx == '/') sb.append('/');
-                else if (nx == 'n') sb.append('\n');
-                else if (nx == 'r') sb.append('\r');
-                else if (nx == 't') sb.append('\t');
-                else { sb.append('\\'); sb.append(nx); }
-                continue;
-            }
-            if (ch == '"') break;
-            sb.append(ch);
-        }
-        return sb.toString();
-    }
-
-    private static Integer extractJsonInt(String json, String key) {
-        String s = "\"" + key + "\":"; int idx = json.indexOf(s);
-        if (idx < 0) return null;
-        idx += s.length();
-        StringBuilder sb = new StringBuilder();
-        for (int i = idx; i < json.length(); i++) {
-            char ch = json.charAt(i);
-            if ((ch >= '0' && ch <= '9') || ch == '-') sb.append(ch); else break;
-        }
-        if (sb.length() == 0) return null;
-        try { return Integer.parseInt(sb.toString()); } catch (NumberFormatException e) { return null; }
-    }
-
     private static int toInt(Object v, int def) {
         if (v instanceof Number) return ((Number) v).intValue();
         if (v instanceof String) try { return Integer.parseInt((String) v); } catch (NumberFormatException e) {}
@@ -939,17 +824,6 @@ public class RecipeApiHandler implements HttpHandler {
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    private static String extractSimpleString(String quoted) { return quoted.substring(1, quoted.length() - 1); }
-
-    private static int skipJsonString(String s, int i) {
-        i++; while (i < s.length()) {
-            if (s.charAt(i) == '\\' && i + 1 < s.length()) i += 2;
-            else if (s.charAt(i) == '"') break;
-            else i++;
-        }
-        return i;
     }
 
     private static String jsonStringList(List<?> list) {

@@ -226,7 +226,7 @@ public class WebApiHandler implements HttpHandler {
             return SaveResult.badRequest(e.getMessage());
         }
 
-        File tempFile = new File(plugin.getDataFolder(), "categories.yml.tmp");
+        File tempFile = new File(plugin.getDataFolder(), "categories.yml.tmp." + System.currentTimeMillis());
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
             writer.write(yaml.saveToString());
             writer.flush();

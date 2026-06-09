@@ -685,6 +685,7 @@ function addPlaceholder() {
 }
 
 function addItem() {
+  if (state.saving) return;
   if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
   if (state.selectedCategory === null) { Toast.show('根级别不能添加物品，请选择子分类', 'warning'); return; }
   state.pickerTarget = 'addItem';
@@ -701,6 +702,7 @@ function addItem() {
 }
 
 function addReference() {
+  if (state.saving) return;
   if (!state.selectedCategory && state.selectedCategory !== null) { Toast.show('请先选择左侧分类', 'warning'); return; }
   if (state.selectedCategory === null) { Toast.show('根级别不能添加引用，请选择子分类', 'warning'); return; }
   state.pickerTarget = 'addReference';

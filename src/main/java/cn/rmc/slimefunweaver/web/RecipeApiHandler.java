@@ -771,7 +771,7 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private static ItemStack resolveItemStack(String id) {
-        if (id == null || id.isEmpty() || "AIR".equalsIgnoreCase(id)) return new ItemStack(Material.AIR);
+        if (id == null || id.isEmpty() || "AIR".equalsIgnoreCase(id)) return null;
         Material mat = Material.matchMaterial(id);
         if (mat != null) return new ItemStack(mat);
         SlimefunItem sfItem = IconParser.findSlimefunItem(id);

@@ -459,6 +459,7 @@ function swapItems(fromPage, fromSlot, toPage, toSlot) {
 
 function selectGridItem(item, idx) {
   state.selectedNode = item;
+  if (item && item.key) state.selectedCategory = item;
   renderGrid();
   renderEditor();
   renderTree();
@@ -466,7 +467,7 @@ function selectGridItem(item, idx) {
 
 function renderEditor() {
   var node = state.selectedNode;
-  if (!node || state.selectedCategory === null) { $('editor-form').style.display = 'none'; $('editor-empty').style.display = 'block'; return; }
+  if (!node) { $('editor-form').style.display = 'none'; $('editor-empty').style.display = 'block'; return; }
   $('editor-form').style.display = 'block';
   $('editor-empty').style.display = 'none';
 
@@ -659,7 +660,6 @@ function addCategory() {
       state.selectedCategory.children.push(newCat);
     } else {
       state.categories.push(newCat);
-      state.selectedCategory = newCat;
     }
     markDirty();
     renderTree();

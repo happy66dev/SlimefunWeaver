@@ -16,14 +16,13 @@
 package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
+import cn.rmc.slimefunweaver.research.CustomResearchManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.config.Config;
-import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -55,6 +54,10 @@ public class ResearchApiHandler implements HttpHandler {
                 serveHtml(exchange, editorHtml);
             } else if (path.equals("/api/researches")) {
                 handleResearches(exchange, method);
+            } else if (path.startsWith("/api/researches/create")) {
+                handleCreateResearch(exchange, method);
+            } else if (path.matches("/api/researches/.+")) {
+                handleDeleteResearch(exchange, method, path);
             } else if (path.equals("/api/slimefun-items")) {
                 handleSlimefunItems(exchange);
             } else {
@@ -106,6 +109,66 @@ public class ResearchApiHandler implements HttpHandler {
             serveJson(exchange, "{\"ok\":true}");
         } else {
             exchange.sendResponseHeaders(405, -1);
+        }
+    }
+
+    private void handleCreateResearch(HttpExchange exchange, String method) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+        if (!WebSecurity.isWriteAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+        if (!"POST".equalsIgnoreCase(method)) { exchange.sendResponseHeaders(405, -1); return; }
+        
+        String body;
+        try { body = WebSecurity.readBody(exchange); }
+        catch (WebSecurity.BodyTooLargeException e) { exchange.sendResponseHeaders(413, -1); return; }
+        if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
+        
+        try {
+            JsonObject json = new JsonParser().parse(body).getAsJsonObject();
+            String namespace = jsonString(json, "namespace");
+            String key = jsonString(json, "key");
+            String name = jsonString(json, "name");
+            
+            if (namespace == null || namespace.isEmpty()) namespace = "slimefun";
+            if (key == null || key.isEmpty() || name == null || name.isEmpty()) {
+                exchange.sendResponseHeaders(400, -1);
+                return;
+            }
+            
+            String fullKey = namespace + ":SWR_" + key;
+            if (CustomResearchManager.researchExists(fullKey)) {
+                serveJson(exchange, "{\"error\":\"研究已存在\"}");
+                return;
+            }
+            
+            CustomResearchManager.createResearch(fullKey, name);
+            serveJson(exchange, "{\"ok\":true,\"fullKey\":\"" + fullKey + "\"}");
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to create research", e);
+            exchange.sendResponseHeaders(500, -1);
+        }
+    }
+
+    private void handleDeleteResearch(HttpExchange exchange, String method, String path) throws IOException {
+        if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+        if (!WebSecurity.isWriteAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
+        if (!"DELETE".equalsIgnoreCase(method)) { exchange.sendResponseHeaders(405, -1); return; }
+        
+        String[] parts = path.split("/");
+        if (parts.length < 4) { exchange.sendResponseHeaders(400, -1); return; }
+        String fullKey;
+        try { fullKey = java.net.URLDecoder.decode(parts[parts.length - 1], "UTF-8"); } catch (Exception e) { fullKey = parts[parts.length - 1]; }
+        
+        try {
+            if (!CustomResearchManager.researchExists(fullKey)) {
+                exchange.sendResponseHeaders(404, -1);
+                return;
+            }
+            
+            CustomResearchManager.deleteResearch(fullKey);
+            serveJson(exchange, "{\"ok\":true}");
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to delete research", e);
+            exchange.sendResponseHeaders(500, -1);
         }
     }
 
@@ -234,12 +297,7 @@ public class ResearchApiHandler implements HttpHandler {
 
     private boolean safeResearchEnabled(String fullKey, boolean fallback) {
         try {
-            Config config = Slimefun.getResearchCfg();
-            if (config == null || fullKey == null) return fallback;
-            String[] parts = fullKey.split(":", 2);
-            String ns = parts.length > 1 ? parts[0] : "slimefun", k = parts.length > 1 ? parts[1] : parts[0];
-            String path = ns + "." + k + ".enabled";
-            return config.contains(path) ? config.getBoolean(path) : fallback;
+            return CustomResearchManager.isResearchEnabled(fullKey, fallback);
         } catch (Exception e) {
             return fallback;
         }
@@ -284,8 +342,6 @@ public class ResearchApiHandler implements HttpHandler {
     }
 
     private boolean saveResearchesFromJson(String json) {
-        Config config = Slimefun.getResearchCfg();
-        if (config == null) { plugin.getLogger().warning("Research config null, save aborted"); return false; }
         List<ResearchUpdate> updates;
         try {
             updates = parseResearchSavePayload(json);
@@ -293,50 +349,42 @@ public class ResearchApiHandler implements HttpHandler {
             plugin.getLogger().log(Level.WARNING, "Invalid research save payload", e);
             return false;
         }
-        String[] previousContent = new String[]{"\0"};
         try {
             runSync(() -> {
-                previousContent[0] = readResearchConfigContent(config);
-                for (ResearchUpdate update : updates) applyResearchUpdate(update, config);
-                config.save();
-                boolean reloaded = Slimefun.getConfigManager().load(true);
-                if (!reloaded) throw new IllegalStateException("Slimefun reload returned false");
-                plugin.getLogger().info("Researches.yml saved via web editor");
+                List<CustomResearchManager.ResearchData> researches = new ArrayList<>();
+                for (ResearchUpdate update : updates) {
+                    CustomResearchManager.ResearchData data = new CustomResearchManager.ResearchData();
+                    data.fullKey = update.fullKey;
+                    data.name = update.name != null ? update.name : update.fullKey;
+                    data.levelCost = update.levelCost != null ? Math.max(0, update.levelCost) : 0;
+                    data.moneyCost = update.moneyCost != null ? Math.max(0, update.moneyCost) : 0.0;
+                    data.enabled = update.enabled != null ? update.enabled : true;
+                    data.items = update.items != null ? update.items : new ArrayList<>();
+                    data.parents = update.parents != null ? update.parents : new ArrayList<>();
+                    data.miningLevelNeed = update.skillLevels.getOrDefault("miningLevelNeed", 0);
+                    data.farmingLevelNeed = update.skillLevels.getOrDefault("farmingLevelNeed", 0);
+                    data.foragingLevelNeed = update.skillLevels.getOrDefault("foragingLevelNeed", 0);
+                    data.fishingLevelNeed = update.skillLevels.getOrDefault("fishingLevelNeed", 0);
+                    data.excavationLevelNeed = update.skillLevels.getOrDefault("excavationLevelNeed", 0);
+                    data.archeryLevelNeed = update.skillLevels.getOrDefault("archeryLevelNeed", 0);
+                    data.defenseLevelNeed = update.skillLevels.getOrDefault("defenseLevelNeed", 0);
+                    data.fightingLevelNeed = update.skillLevels.getOrDefault("fightingLevelNeed", 0);
+                    data.agilityLevelNeed = update.skillLevels.getOrDefault("agilityLevelNeed", 0);
+                    data.enchantingLevelNeed = update.skillLevels.getOrDefault("enchantingLevelNeed", 0);
+                    data.alchemyLevelNeed = update.skillLevels.getOrDefault("alchemyLevelNeed", 0);
+                    researches.add(data);
+                }
+                try {
+                    CustomResearchManager.saveAllResearches(researches);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                plugin.getLogger().info("CustomResearches.yml saved via web editor (" + researches.size() + " researches)");
             });
             return true;
         } catch (Exception e) {
-            restoreResearchConfig(config, previousContent[0]);
-            plugin.getLogger().log(Level.WARNING, "Failed to save Researches.yml via web editor", e);
+            plugin.getLogger().log(Level.WARNING, "Failed to save CustomResearches.yml via web editor", e);
             return false;
-        }
-    }
-
-    private String readResearchConfigContent(Config config) {
-        try {
-            File file = config.getFile();
-            if (file == null || !file.exists()) return "\0";
-            return new String(java.nio.file.Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to backup Researches.yml before web save", e);
-            return "\0";
-        }
-    }
-
-    private void restoreResearchConfig(Config config, String previousContent) {
-        try {
-            File file = config.getFile();
-            if (file == null) return;
-            runSync(() -> {
-                try {
-                    if (!"\0".equals(previousContent)) {
-                        java.nio.file.Files.write(file.toPath(), previousContent.getBytes(StandardCharsets.UTF_8));
-                    }
-                } catch (IOException e) { throw new RuntimeException(e); }
-                config.reload();
-                Slimefun.getConfigManager().load(true);
-            });
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to restore Researches.yml after web save failure", e);
         }
     }
 
@@ -362,12 +410,25 @@ public class ResearchApiHandler implements HttpHandler {
             JsonObject obj = element.getAsJsonObject();
             String fullKey = jsonString(obj, "fullKey");
             if (fullKey == null || fullKey.isEmpty()) continue;
-            // 内部工具，内网环境，无需key格式校验
-            // if (!fullKey.matches("^[a-z0-9_]+:[a-z0-9_]+$")) continue;
             ResearchUpdate update = new ResearchUpdate(fullKey);
+            update.name = jsonString(obj, "name");
             update.levelCost = jsonInt(obj, "levelCost");
             update.moneyCost = jsonDouble(obj, "moneyCost");
             update.enabled = jsonBoolean(obj, "enabled");
+            JsonArray items = jsonArray(obj, "items");
+            if (items != null) {
+                update.items = new ArrayList<>();
+                for (JsonElement item : items) {
+                    if (item.isJsonPrimitive()) update.items.add(item.getAsString());
+                }
+            }
+            JsonArray parents = jsonArray(obj, "parents");
+            if (parents != null) {
+                update.parents = new ArrayList<>();
+                for (JsonElement parent : parents) {
+                    if (parent.isJsonPrimitive()) update.parents.add(parent.getAsString());
+                }
+            }
             JsonArray needItems = jsonArray(obj, "needUnlockedItems");
             if (needItems != null) {
                 update.needUnlockedItems = new ArrayList<>();
@@ -387,27 +448,17 @@ public class ResearchApiHandler implements HttpHandler {
 
     static class ResearchUpdate {
         final String fullKey;
+        String name;
         Integer levelCost;
         Double moneyCost;
         Boolean enabled;
+        List<String> items;
+        List<String> parents;
         List<String> needUnlockedItems;
         final Map<String, Integer> skillLevels = new LinkedHashMap<>();
 
         ResearchUpdate(String fullKey) {
             this.fullKey = fullKey;
-        }
-    }
-
-    private void applyResearchUpdate(ResearchUpdate update, Config config) {
-        String[] parts = update.fullKey.split(":", 2);
-        String ns = parts.length > 1 ? parts[0] : "slimefun", k = parts.length > 1 ? parts[1] : parts[0];
-        String path = ns + "." + k;
-        if (update.levelCost != null) config.setValue(path + ".levelCost", Math.max(0, update.levelCost));
-        if (update.moneyCost != null) config.setValue(path + ".moneyCost", Math.max(0, update.moneyCost));
-        if (update.enabled != null) config.setValue(path + ".enabled", update.enabled);
-        if (update.needUnlockedItems != null) config.setValue(path + ".need-unlocked-items", update.needUnlockedItems);
-        for (Map.Entry<String, Integer> entry : update.skillLevels.entrySet()) {
-            config.setValue(path + "." + entry.getKey(), Math.max(0, entry.getValue()));
         }
     }
 

@@ -63,8 +63,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .item-cell .item-icon{font-size:18px}
 .item-cell .item-name{color:#c9d1d9}
 .item-cell .item-id{color:#484f58;font-size:9px;font-family:'SF Mono','Consolas',monospace}
-.item-cell .item-remove{position:absolute;top:2px;right:3px;font-size:10px;color:#f85149;cursor:pointer;line-height:1;padding:1px 2px;border-radius:2px;display:none}
-.item-cell:hover .item-remove{display:block}
 #ct-empty{flex:1;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:12px}
 #center-bottom{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
 #cb-header{padding:7px 12px;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
@@ -176,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="panel-header">
     <span>📁 研究列表</span>
     <div style="display:flex;gap:4px;align-items:center">
-      <button class="btn btn-xs" onclick="createResearch()" title="创建新研究">+ 创建</button>
+      <button class="btn btn-xs" onclick="mockCreateResearch()" title="创建新研究">+ 创建</button>
     </div>
   </div>
   <input id="research-search" type="text" placeholder="搜索ID/物品名..." oninput="filterResearch()"/>
@@ -225,7 +223,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="form-group"><label>前置依赖</label><div class="dep-section"><div class="dep-hdr">前置 (<span id="parents-count">0</span>)</div><div id="parents-list"></div></div></div>
     <div class="form-group"><label>后代依赖</label><div class="dep-section"><div id="children-list"></div></div></div>
     <div class="form-group" style="border-top:1px solid #21262d;padding-top:12px;margin-top:12px">
-      <button class="btn btn-sm btn-danger" onclick="deleteResearch()" style="width:100%">🗑️ 删除此研究</button>
+      <button class="btn btn-sm btn-danger" onclick="mockDeleteResearch()" style="width:100%">🗑️ 删除此研究</button>
     </div>
   </div>
   <div class="yaml-preview" id="yaml-preview" style="display:none"></div>
@@ -299,8 +297,7 @@ function saveResearches() {
     clampResearch(r);
     var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
     r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) needItems.push(pr.items[0].id); } });
-    var itemIds = (r.items || []).map(function(it) { return typeof it === 'string' ? it : it.id; });
-    return {fullKey: r.fullKey || r.key, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: itemIds, parents: r.parents || [], needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
+    return {fullKey: r.fullKey || r.key, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
   return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});if(saved)r.needUnlockedItems=saved.needUnlockedItems});if(dirtyVersion===savingDirtyVersion){unsaved={newResearches:new Set(),newDeps:new Set()};clearDirty()}else if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}savingResearches=false;buildResearchList(document.getElementById("research-search").value);renderGraph();showToast("保存成功","success");}).catch(function(e){savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}showToast("保存失败: "+e.message,"error");});
 }
@@ -354,7 +351,7 @@ function renderCenterTop(){
   var grid=document.getElementById('items-grid'),empty=document.getElementById('ct-empty'),title=document.getElementById('ct-section-title');
   if(!selectedResearch){grid.innerHTML='';empty.style.display='flex';title.innerHTML='📦 请选择左侧研究';return}
   empty.style.display='none';title.innerHTML='📦 <span style="color:#e94560;">'+MC.parseToHtml(selectedResearch.name)+'</span> ('+selectedResearch.items.length+'个)';
-  var h='';selectedResearch.items.forEach(function(it){h+='<div class="item-cell"><span class="item-remove" onclick="event.stopPropagation();removeItemFromResearch(\''+escJS(it.id)+'\')">×</span><span class="item-icon">📦</span><span class="item-name">'+MC.parseToHtml(it.name)+'</span><span class="item-id">'+MC.escapeHtml(it.id)+'</span></div>'});
+  var h='';selectedResearch.items.forEach(function(it){h+='<div class="item-cell"><span class="item-icon">📦</span><span class="item-name">'+MC.parseToHtml(it.name)+'</span><span class="item-id">'+MC.escapeHtml(it.id)+'</span></div>'});
   grid.innerHTML=h;
 }
 function renderRightPanel(){
@@ -421,7 +418,7 @@ function renderDeps(){
         var h='';
         items.forEach(function(it){
           var alreadyIn=selectedResearch&&selectedResearch.items.some(function(si){return si.id===it.id});
-          h+='<div data-item-id="'+MC.escapeHtml(it.id)+'" style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+';position:relative" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
+          h+='<div style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+'" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
       +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
             +' <span style="color:#c9d1d9">'+MC.parseToHtml(it.name||'')+'</span>'
             +(alreadyIn?' <span style="color:#3fb950;font-size:9px">✓已添加</span>':'')
@@ -431,6 +428,7 @@ function renderDeps(){
       }).catch(function(){document.getElementById('item-picker-results').innerHTML='<div style="color:#f85149;padding:8px">加载失败</div>'})
     },250);
   }
+  function addItemToResearch(id,name){showToast('物品归属暂不支持保存，请在配置文件中修改','info')}
 function renderYamlPreview(){
   var r=selectedResearch,h=[];h.push('<span class="yaml-comment"># Researches.yml</span><span class="yaml-key">slimefun:</span>');
   h.push('  <span class="yaml-key">'+MC.escapeHtml(r.shortKey||r.key)+':</span>');
@@ -626,70 +624,24 @@ loadResearches().then(function() {
   document.getElementById('research-list').innerHTML = '<div style="padding:16px;color:#f85149">加载失败: ' + e.message + '</div>';
 });
 
-// ========== 创建/删除研究功能 ==========
-function createResearch() {
-  if (savingResearches) return;
-  var key = prompt('输入研究 key（英文 ID，仅允许字母数字下划线）');
+// ========== Mock 函数用于预览 ==========
+function mockCreateResearch() {
+  var key = prompt('输入研究 key（英文 ID）', 'my_custom_research');
   if (!key) return;
-  key = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  if (!key) { showToast('无效的研究 key', 'error'); return; }
-  var name = prompt('输入显示名称（支持 & 颜色代码）', key);
+  var name = prompt('输入显示名称（支持 & 颜色代码）', '&e' + key);
   if (!name) return;
-  var namespace = 'slimefun';
-  fetch('/api/researches/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({namespace:namespace, key:key, name:name})})
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.error) { showToast('创建失败: ' + data.error, 'error'); return; }
-      showToast('已创建研究 ' + data.fullKey + '，重启后生效', 'success');
-      var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'SWR_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
-      researches.push(newR);
-      markDirty();
-      buildResearchList(document.getElementById('research-search').value);
-      autoLayout();
-      selectResearch(newR.key);
-    })
-    .catch(function(e){ showToast('创建失败: ' + e.message, 'error'); });
+  alert('创建研究预览\n\nID: slimefun:SWR_' + key + '\n名称: ' + name + '\n\n（实际实现将 POST /api/researches/create）');
 }
 
-function deleteResearch() {
-  if (!selectedResearch) { showToast('请先选中一个研究', 'info'); return; }
-  if (savingResearches) return;
-  var r = selectedResearch;
-  var affectedCount = r.items ? r.items.length : 0;
-  var descendantCount = r.descendants ? r.descendants.length : 0;
-  if (!confirm('确定删除研究「' + MC.strip(r.name) + '」？\n\n- 该研究绑定的 ' + affectedCount + ' 个物品将变为无需研究\n- ' + descendantCount + ' 个其他研究的前置依赖将被移除\n\n此操作重启后生效。')) return;
-  var encodedKey = encodeURIComponent(r.fullKey);
-  fetch('/api/researches/' + encodedKey, {method:'DELETE'})
-    .then(function(rsp){ if (!rsp.ok) throw new Error('HTTP ' + rsp.status); return rsp.json(); })
-    .then(function() {
-      researches = researches.filter(function(rr){ return rr.key !== r.key; });
-      researches.forEach(function(rr){ rr.parents = (rr.parents||[]).filter(function(p){ return p !== r.key; }); rr.descendants = (rr.descendants||[]).filter(function(d){ return d !== r.key; }); });
-      if (selectedResearch && selectedResearch.key === r.key) { selectedResearch = null; document.getElementById('editor-form').style.display='none'; document.getElementById('editor-empty').style.display='block'; }
-      markDirty();
-      buildResearchList(document.getElementById('research-search').value);
-      autoLayout();
-      showToast('已删除研究，重启后生效', 'success');
-    })
-    .catch(function(e){ showToast('删除失败: ' + e.message, 'error'); });
-}
-
-function addItemToCurrentResearch(id, name) {
-  if (!selectedResearch) { showToast('请先选中一个研究', 'info'); return; }
-  if (selectedResearch.items.some(function(it){ return it.id === id; })) { showToast('该物品已在此研究中', 'info'); return; }
-  selectedResearch.items.push({id:id, name:name||id});
-  markDirty();
-  renderCenterTop(selectedResearch);
-  buildResearchList(document.getElementById('research-search').value);
-  hideItemPicker();
-  showToast('已添加物品 ' + id, 'success');
-}
-
-function removeItemFromResearch(itemId) {
-  if (!selectedResearch || savingResearches) return;
-  selectedResearch.items = selectedResearch.items.filter(function(it){ return it.id !== itemId; });
-  markDirty();
-  renderCenterTop(selectedResearch);
-  buildResearchList(document.getElementById('research-search').value);
+function mockDeleteResearch() {
+  if (!selectedResearch) {
+    alert('请先在左侧选中一个研究');
+    return;
+  }
+  if (!confirm('确定删除研究「' + selectedResearch.name + '」？\n\n- 该研究绑定的 ' + selectedResearch.items.length + ' 个物品将变为无需研究\n- 依赖此研究的其他研究的前置将被移除\n\n（实际实现将 DELETE /api/researches/' + selectedResearch.fullKey + '）')) {
+    return;
+  }
+  alert('删除请求已发送（预览模式）');
 }
 
 function toggleColorPicker(popup, input) {
@@ -700,44 +652,18 @@ function toggleColorPicker(popup, input) {
   }
 }
 
-// Override searchItems to show locked items at bottom
-var _originalSearchItems = window.searchItems;
+// Override searchItems to show locked items demo
+var originalSearchItems = window.searchItems;
 window.searchItems = function() {
-  if (typeof _originalSearchItems === 'function') _originalSearchItems();
+  if (typeof originalSearchItems === 'function') {
+    originalSearchItems();
+  }
+  // Mock: 在搜索结果中添加一些锁定物品示例
   var resultsDiv = document.getElementById('item-picker-results');
-  if (!resultsDiv) return;
-  var rows = resultsDiv.querySelectorAll('[data-item-id]');
-  var locked = [], unlocked = [];
-  rows.forEach(function(row) {
-    var itemId = row.getAttribute('data-item-id');
-    var ownerKey = null;
-    researches.forEach(function(rr) { if ((rr.items||[]).some(function(it){ return it.id === itemId; })) ownerKey = rr; });
-    if (ownerKey && (!selectedResearch || ownerKey.key !== selectedResearch.key)) {
-      row.style.opacity = '0.4'; row.style.cursor = 'not-allowed';
-      row.onclick = null;
-      var tag = document.createElement('span');
-      tag.className = 'item-research-tag';
-      tag.textContent = MC.strip(ownerKey.name);
-      row.appendChild(tag);
-      locked.push(row);
-    } else {
-      unlocked.push(row);
-    }
-  });
-  resultsDiv.innerHTML = '';
-  unlocked.forEach(function(r){ resultsDiv.appendChild(r); });
-  if (locked.length > 0) {
-    var sep = document.createElement('div');
-    sep.style = 'margin:6px 0 3px;padding:3px 4px;background:#21262d;border-radius:3px;font-size:9px;color:#8b949e';
-    sep.textContent = '↓ 已归属（锁定）';
-    resultsDiv.appendChild(sep);
-    locked.forEach(function(r){ resultsDiv.appendChild(r); });
+  if (resultsDiv && resultsDiv.innerHTML) {
+    resultsDiv.innerHTML += '<div style="margin-top:8px;padding:4px;background:#21262d;border-radius:4px;font-size:9px;color:#8b949e">⬆️ 可用物品 | ⬇️ 已归属物品（置底锁定）</div>';
+    resultsDiv.innerHTML += '<div class="item-cell locked" style="display:inline-block;width:90px;margin:4px"><div class="item-research-tag">远古祭坛</div><div class="item-icon">📦</div><div class="item-name">已锁定物品</div><div class="item-id">LOCKED_ITEM</div></div>';
   }
 };
-
-// Override addItemToResearch to call new function
-function addItemToResearch(id, name) {
-  addItemToCurrentResearch(id, name);
-}
 
 </script></body></html>

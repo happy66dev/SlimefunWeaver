@@ -19,6 +19,7 @@ import cn.rmc.slimefunweaver.command.CustomGuideCommand;
 import cn.rmc.slimefunweaver.config.CategoryConfigLoader;
 import cn.rmc.slimefunweaver.listener.CustomGuideListener;
 import cn.rmc.slimefunweaver.model.CustomCategory;
+import cn.rmc.slimefunweaver.research.CustomResearchManager;
 import cn.rmc.slimefunweaver.settings.CustomGuideModeOption;
 import cn.rmc.slimefunweaver.web.RecipeApiHandler;
 import cn.rmc.slimefunweaver.web.WebApiHandler;
@@ -67,6 +68,8 @@ public final class SlimefunWeaver extends JavaPlugin implements SlimefunAddon {
         if (getConfig().getBoolean("web-editor.auto-load-recipes", true)) {
             getServer().getScheduler().runTask(this, () -> RecipeApiHandler.loadRecipesOnStartup(this));
         }
+        
+        getServer().getScheduler().runTask(this, () -> CustomResearchManager.initialize(this));
 
         CustomGuideCommand cmd = new CustomGuideCommand(this);
         getCommand("slimefunweaver").setExecutor(cmd);

@@ -13,6 +13,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
 public class CustomResearchManager {
@@ -22,7 +23,8 @@ public class CustomResearchManager {
     private static SlimefunWeaver plugin;
     private static File configFile;
     private static boolean initialized = false;
-    private static int nextResearchId = 100000;
+    // Research ID 从 100000 开始递增，避免与原版 Slimefun 研究 ID (通常 < 10000) 冲突
+    private static final AtomicInteger nextResearchId = new AtomicInteger(100000);
 
     public static void initialize(SlimefunWeaver pluginInstance) {
         if (initialized) {
@@ -170,7 +172,7 @@ public class CustomResearchManager {
             return;
         }
         
-        Research research = new Research(nsKey, nextResearchId++, name, levelCost);
+        Research research = new Research(nsKey, nextResearchId.getAndIncrement(), name, levelCost);
         research.setMoneyCost(moneyCost);
         
         List<String> itemIds = config.getStringList("items");

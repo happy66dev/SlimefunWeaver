@@ -702,7 +702,9 @@ function addItemToCurrentResearch(id, name) {
 
 function removeItemFromResearch(itemId) {
   if (!selectedResearch || savingResearches) return;
-  selectedResearch.items = selectedResearch.items.filter(function(it){ return it.id !== itemId; });
+  selectedResearch.items = selectedResearch.items.filter(function(it){ 
+    return (typeof it === 'string' ? it : it.id) !== itemId; 
+  });
   delete itemIdToResearch[itemId];
   markDirty();
   renderCenterTop(selectedResearch);

@@ -17,6 +17,7 @@ package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
 import cn.rmc.slimefunweaver.model.CustomCategory;
+import cn.rmc.slimefunweaver.util.ColorUtil;
 import cn.rmc.slimefunweaver.util.VanillaMaterialLocalization;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -481,7 +482,8 @@ public class WebApiHandler implements HttpHandler {
             for (SlimefunItem sfItem : Slimefun.getRegistry().getEnabledSlimefunItems()) {
                 String name = sfItem.getItemName();
                 String id = sfItem.getId();
-                if ((name != null && name.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
+                String strippedName = ColorUtil.stripColorCodes(name);
+                if ((strippedName != null && strippedName.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
                     if (!first) sb.append(',');
                     sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(JsonUtil.escape(id));
                     sb.append("\",\"display\":\"").append(JsonUtil.escape(name != null ? name : id));

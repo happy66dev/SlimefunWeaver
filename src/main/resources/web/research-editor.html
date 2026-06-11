@@ -352,7 +352,16 @@ var dragConnect = {active: false, fromKey: null, fromPortX: 0, fromPortY: 0};
 function buildResearchList(filter){
   var list=document.getElementById('research-list'),h='';
   researches.forEach(function(r){
-    if(filter){var f=filter.toLowerCase(),mk=r.key.toLowerCase().indexOf(f)>=0,mn=r.name.toLowerCase().indexOf(f)>=0,mi=r.items.some(function(it){return it.id.toLowerCase().indexOf(f)>=0||it.name.toLowerCase().indexOf(f)>=0});if(!mk&&!mn&&!mi)return}
+    if(filter){
+      var f=filter.toLowerCase(),
+          mk=r.key.toLowerCase().indexOf(f)>=0,
+          mn=MC.strip(r.name).toLowerCase().indexOf(f)>=0,
+          mi=r.items.some(function(it){
+            return it.id.toLowerCase().indexOf(f)>=0
+                || MC.strip(it.name).toLowerCase().indexOf(f)>=0;
+          });
+      if(!mk&&!mn&&!mi)return
+    }
     var isNew=unsaved.newResearches.has(r.key);
     var tags='',ms=4;
     if(r.items.length>ms){tags=r.items.slice(0,ms).map(function(it){return'<span class="r-tag">'+MC.parseToHtml(it.name)+'</span>'}).join('')+'<span class="r-tag">+'+ (r.items.length-ms)+'</span>'}

@@ -16,6 +16,7 @@
 package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
+import cn.rmc.slimefunweaver.util.ColorUtil;
 import cn.rmc.slimefunweaver.util.IconParser;
 import cn.rmc.slimefunweaver.util.VanillaMaterialLocalization;
 import com.google.gson.JsonArray;
@@ -175,12 +176,12 @@ public class RecipeApiHandler implements HttpHandler {
         for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
             String id = item.getId().toLowerCase(Locale.ROOT);
             String name = item.getItemName();
-            String nameLower = name != null ? org.bukkit.ChatColor.stripColor(name).toLowerCase(Locale.ROOT) : "";
+            String nameLower = name != null ? ColorUtil.stripColorCodes(name).toLowerCase(Locale.ROOT) : "";
             if (!q.isEmpty() && !id.contains(q) && !nameLower.contains(q)) continue;
             if (count >= max) break;
             if (!first) sb.append(','); first = false;
             sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(escapeJson(item.getId())).append("\",\"display\":\"")
-              .append(escapeJson(nameLower.isEmpty() ? item.getId() : org.bukkit.ChatColor.stripColor(name)))
+              .append(escapeJson(nameLower.isEmpty() ? item.getId() : ColorUtil.stripColorCodes(name)))
               .append("\"}");
             count++;
         }
@@ -823,7 +824,7 @@ public class RecipeApiHandler implements HttpHandler {
             if (rtItem != null && rtItem.hasItemMeta() && rtItem.getItemMeta().hasLore()) {
                 for (String lore : rtItem.getItemMeta().getLore()) {
                     if (lore != null && !lore.trim().isEmpty())
-                        return org.bukkit.ChatColor.stripColor(lore.trim());
+                    return ColorUtil.stripColorCodes(lore.trim());
                 }
             }
         } catch (Exception ignored) {}

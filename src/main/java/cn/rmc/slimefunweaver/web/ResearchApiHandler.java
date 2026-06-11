@@ -17,6 +17,7 @@ package cn.rmc.slimefunweaver.web;
 
 import cn.rmc.slimefunweaver.SlimefunWeaver;
 import cn.rmc.slimefunweaver.research.CustomResearchManager;
+import cn.rmc.slimefunweaver.util.ColorUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -194,7 +195,8 @@ public class ResearchApiHandler implements HttpHandler {
             list = new ArrayList<>();
             for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
                 String name = item.getItemName(), id = item.getId();
-                if ((name != null && name.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) list.add(item);
+                String strippedName = ColorUtil.stripColorCodes(name);
+                if ((strippedName != null && strippedName.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) list.add(item);
             }
         } else {
             list = Slimefun.getRegistry().getEnabledSlimefunItems();

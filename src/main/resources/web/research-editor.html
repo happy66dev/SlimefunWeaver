@@ -332,6 +332,21 @@ function rebuildItemOwnershipMap() {
     });
   });
 }
+
+function updateItemOwnership(itemId, research) {
+  if (research) {
+    itemIdToResearch[itemId] = research;
+  } else {
+    delete itemIdToResearch[itemId];
+  }
+}
+
+function removeResearchFromOwnership(research) {
+  (research.items || []).forEach(function(it) {
+    var itemId = typeof it === 'string' ? it : it.id;
+    delete itemIdToResearch[itemId];
+  });
+}
 var dragConnect = {active: false, fromKey: null, fromPortX: 0, fromPortY: 0};
 
 function buildResearchList(filter){
@@ -674,6 +689,7 @@ function deleteResearch() {
   fetch('/api/researches/' + encodedKey, {method:'DELETE'})
     .then(function(rsp){ if (!rsp.ok) throw new Error('HTTP ' + rsp.status); return rsp.json(); })
     .then(function() {
+      removeResearchFromOwnership(r);
       researches = researches.filter(function(rr){ return rr.key !== r.key; });
       researches.forEach(function(rr){ rr.parents = (rr.parents||[]).filter(function(p){ return p !== r.key; }); rr.descendants = (rr.descendants||[]).filter(function(d){ return d !== r.key; }); });
       if (selectedResearch && selectedResearch.key === r.key) { selectedResearch = null; document.getElementById('editor-form').style.display='none'; document.getElementById('editor-empty').style.display='block'; }
@@ -692,7 +708,7 @@ function addItemToCurrentResearch(id, name) {
   });
   if (exists) { showToast('该物品已在此研究中', 'info'); return; }
   selectedResearch.items.push({id:id, name:name||id});
-  itemIdToResearch[id] = selectedResearch;
+  updateItemOwnership(id, selectedResearch);
   markDirty();
   renderCenterTop(selectedResearch);
   buildResearchList(document.getElementById('research-search').value);
@@ -705,7 +721,7 @@ function removeItemFromResearch(itemId) {
   selectedResearch.items = selectedResearch.items.filter(function(it){ 
     return (typeof it === 'string' ? it : it.id) !== itemId; 
   });
-  delete itemIdToResearch[itemId];
+  updateItemOwnership(itemId, null);
   markDirty();
   renderCenterTop(selectedResearch);
   buildResearchList(document.getElementById('research-search').value);

@@ -459,7 +459,6 @@ function swapItems(fromPage, fromSlot, toPage, toSlot) {
 
 function selectGridItem(item, idx) {
   state.selectedNode = item;
-  if (item && item.key) state.selectedCategory = item;
   renderGrid();
   renderEditor();
   renderTree();

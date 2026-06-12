@@ -323,7 +323,7 @@ public class ResearchApiHandler implements HttpHandler {
         try {
             String name = r.getName(null);
             return name != null && !name.isEmpty() ? name : fallback;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return fallback;
         }
     }

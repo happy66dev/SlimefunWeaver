@@ -57,7 +57,9 @@ public class CustomResearchManager {
                 String key = parts.length > 1 ? parts[1] : parts[0];
                 String customKey = namespace + ":" + RESEARCH_PREFIX + key;
                 
-                config.set("researches." + customKey + ".name", r.getName(null));
+                String researchName;
+                try { researchName = r.getName(null); } catch (Exception ignored) { researchName = key; }
+                config.set("researches." + customKey + ".name", researchName);
                 config.set("researches." + customKey + ".level-cost", r.getLevelCost());
                 config.set("researches." + customKey + ".money-cost", r.getMoneyCost());
                 config.set("researches." + customKey + ".enabled", true);

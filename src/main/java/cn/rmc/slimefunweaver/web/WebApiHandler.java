@@ -207,7 +207,7 @@ public class WebApiHandler implements HttpHandler {
 
         JsonElement parsed;
         try {
-            parsed = JsonParser.parseString(json);
+            parsed = new JsonParser().parse(json);
         } catch (Exception e) {
             return SaveResult.badRequest("invalid json");
         }

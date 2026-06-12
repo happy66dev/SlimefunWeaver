@@ -124,7 +124,7 @@ public class ResearchApiHandler implements HttpHandler {
         if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
         
         try {
-            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+            JsonObject json = new JsonParser().parse(body).getAsJsonObject();
             String namespace = jsonString(json, "namespace");
             String key = jsonString(json, "key");
             String name = jsonString(json, "name");
@@ -409,7 +409,7 @@ public class ResearchApiHandler implements HttpHandler {
 
     static List<ResearchUpdate> parseResearchSavePayload(String json) {
         List<ResearchUpdate> updates = new ArrayList<>();
-        JsonElement parsed = JsonParser.parseString(json);
+        JsonElement parsed = new JsonParser().parse(json);
         if (!parsed.isJsonObject()) return updates;
         JsonObject rootObj = parsed.getAsJsonObject();
         if (!rootObj.has("researches") || !rootObj.get("researches").isJsonArray()) return updates;

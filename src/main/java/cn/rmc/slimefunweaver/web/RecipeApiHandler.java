@@ -757,6 +757,7 @@ public class RecipeApiHandler implements HttpHandler {
         private final ItemStack[] recipe;
         private final ItemStack output;
         private final int processingTime;
+        private final List<RecipeEntry> additionalRecipes;
 
         RecipeSnapshot(SlimefunItem item) {
             this.type = item.getRecipeType();
@@ -767,6 +768,7 @@ public class RecipeApiHandler implements HttpHandler {
             int pt = 0;
             try { Method gpt = item.getClass().getMethod("getProcessingTime"); pt = (int) gpt.invoke(item); } catch (Exception ignored) {}
             this.processingTime = pt;
+            this.additionalRecipes = new ArrayList<>(item.getAdditionalRecipes());
         }
 
         void restore(SlimefunItem item) {
@@ -782,6 +784,11 @@ public class RecipeApiHandler implements HttpHandler {
                     Method setProcessingTime = item.getClass().getMethod("setProcessingTime", int.class);
                     setProcessingTime.invoke(item, processingTime);
                 } catch (Exception ignored) {}
+            }
+            // Clear current additional recipes and restore originals
+            item.clearAdditionalRecipes();
+            for (RecipeEntry entry : additionalRecipes) {
+                item.addRecipe(entry.getRecipeType(), entry.getRecipe(), entry.getRecipeOutput());
             }
         }
     }

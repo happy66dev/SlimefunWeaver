@@ -156,6 +156,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 2px rgba(233,69,96,0.3)}50%{box-shadow:0 0 16px 4px rgba(233,69,96,0.6)}}
 .gnode.flash{animation:pulse 0.5s ease-in-out 3}
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center}
+.modal-box{background:#161b22;border:1px solid #30363d;border-radius:10px;min-width:340px;max-width:460px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.6);overflow:hidden}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #21262d;font-weight:600;font-size:13px;color:#e94560}
+.modal-body{padding:14px;font-size:12px;color:#c9d1d9;line-height:1.6}
+.modal-body input[type=text]{width:100%;padding:6px 9px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:12px;font-family:'SF Mono','Consolas',monospace;outline:none;margin-top:4px}
+.modal-body input[type=text]:focus{border-color:#e94560;box-shadow:0 0 0 2px rgba(233,69,96,0.15)}
+.modal-body label{display:block;font-size:10px;font-weight:600;color:#8b949e;margin-top:10px;text-transform:uppercase;letter-spacing:0.3px}
+.modal-body .modal-preview{margin-top:6px;padding:6px 8px;background:#0d1117;border-radius:4px;border:1px solid #21262d;font-size:11px;min-height:20px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #21262d}
 </style></head><body>
 <div id="app">
 <div id="toolbar">
@@ -214,7 +223,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="form-group"><label>研究ID</label><input type="text" id="edit-key" disabled/><span id="edit-namespaced" style="font-size:10px;color:#484f58;margin-top:2px;display:inline-block"></span></div>
     <div class="form-group"><label>本地化译名</label>
       <div style="display:flex;gap:4px;align-items:center">
-        <input type="text" id="edit-locname" disabled style="flex:1"/>
+        <input type="text" id="edit-locname" style="flex:1" oninput="onLocNameFieldInput()"/>
         <button class="btn btn-xs" id="btn-color-picker-toggle" onclick="toggleColorPicker(document.getElementById('color-picker'),document.getElementById('edit-locname'));updateLocPreview()" title="颜色代码">🎨</button>
       </div>
       <div id="loc-preview" style="margin-top:5px;padding:6px;background:#0d1117;border-radius:4px;border:1px solid #30363d;font-size:11px;min-height:20px"></div>
@@ -235,6 +244,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="arrow-delete-bar"><span id="arrow-info"></span><button class="btn btn-xs btn-danger" onclick="deleteSelectedArrow()">🗑 删除</button><button class="btn btn-xs" onclick="deselectArrow()">✕</button></div>
 <div class="color-picker-popup" id="color-picker"></div>
 <div id="toast"></div>
+<div id="modal-overlay"></div>
 <div class="color-picker-popup" id="item-picker-popup" style="width:340px;max-height:360px;overflow-y:auto">
   <div style="font-size:11px;font-weight:600;color:#e94560;margin-bottom:6px">➕ 添加物品到当前研究</div>
   <input type="text" id="item-picker-search" placeholder="搜索物品ID或名称..." style="width:100%;padding:5px 8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:11px;margin-bottom:6px" oninput="searchItems()" onkeydown="if(event.key==='Escape')hideItemPicker()"/>
@@ -265,6 +275,15 @@ var MC={
         if((c==='x'||c==='X')&&i+13<t.length){var m=t[i],h='',v=true;for(var j=2;j<=13;j+=2){if(t[i+j]!==m){v=false;break}var hd=t[i+j+1];if(!/[0-9a-fA-F]/.test(hd)){v=false;break}h+=hd}if(v){s+='color:#'+h+';';i+=14;continue}}
         if('0123456789abcdefABCDEFklmnor'.indexOf(c)>=0){c=c.toLowerCase();if(c==='r')s='';else if(c==='l')s+='font-weight:bold;';else if(c==='m')s+='text-decoration:line-through;';else if(c==='n')s+='text-decoration:underline;';else if(c==='o')s+='font-style:italic;';else if(MC.colors[c])s+='color:'+MC.colors[c]+';';i+=2;continue}}o+='<span style="'+s+'">'+MC.escapeHtml(t[i])+'</span>';i++}return o},
   escapeHtml:function(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+};
+// ═══ Dialog ═══
+var Dialog={
+  _overlay:null,
+  _init:function(){if(!Dialog._overlay)Dialog._overlay=document.getElementById('modal-overlay')},
+  alert:function(msg,cb){Dialog._init();Dialog._overlay.innerHTML='<div class="modal-box"><div class="modal-header"><span>提示</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body">'+msg+'</div><div class="modal-footer"><button class="btn btn-primary btn-sm" onclick="Dialog.close()">确定</button></div></div>';Dialog._overlay.style.display='flex';Dialog._cb=cb},
+  confirm:function(msg,cb){Dialog._init();Dialog._overlay.innerHTML='<div class="modal-box"><div class="modal-header"><span>确认</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body">'+msg+'</div><div class="modal-footer"><button class="btn btn-sm" onclick="Dialog.close()">取消</button><button class="btn btn-danger btn-sm" id="dialog-confirm-btn">确定</button></div></div>';Dialog._overlay.style.display='flex';document.getElementById('dialog-confirm-btn').onclick=function(){Dialog.close();if(cb)cb(true)}},
+  prompt2:function(t1,def1,t2,def2,cb){Dialog._init();Dialog._overlay.innerHTML='<div class="modal-box"><div class="modal-header"><span>创建研究</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body"><label>'+t1+'</label><input type="text" id="dlg-in1" value="'+((def1||'').replace(/"/g,'&quot;'))+'" autofocus><label>'+t2+'</label><input type="text" id="dlg-in2" value="'+((def2||'').replace(/"/g,'&quot;'))+'"><div class="modal-preview" id="dlg-preview"></div></div><div class="modal-footer"><button class="btn btn-sm" onclick="Dialog.close()">取消</button><button class="btn btn-primary btn-sm" id="dialog-ok-btn">创建</button></div></div>';Dialog._overlay.style.display='flex';var i1=document.getElementById('dlg-in1'),i2=document.getElementById('dlg-in2'),pv=document.getElementById('dlg-preview');function updPreview(){pv.innerHTML='预览: '+(i2.value?MC.parseToHtml(i2.value):'<span style="color:#484f58">空</span>')}i2.oninput=updPreview;updPreview();i1.focus();i1.select();var ok=function(){var v1=i1.value.trim(),v2=i2.value.trim();Dialog.close();if(cb)cb(v1,v2)};document.getElementById('dialog-ok-btn').onclick=ok;i1.onkeydown=function(e){if(e.key==='Enter')i2.focus()};i2.onkeydown=function(e){if(e.key==='Enter')ok()}},
+  close:function(){Dialog._overlay.style.display='none';Dialog._overlay.innerHTML=''}
 };
 
 
@@ -306,7 +325,7 @@ function saveResearches() {
 }
 function discardChanges(){
   if(savingResearches){showToast('正在保存，请稍后再放弃修改','info');return}
-  if(!confirm('确定放弃所有未保存的修改？'))return;
+  Dialog.confirm('确定放弃所有未保存的修改？',function(){
   loadResearches().then(function(){
     unsaved={newResearches:new Set(),newDeps:new Set()};
     clearDirty();
@@ -317,6 +336,7 @@ function discardChanges(){
     showToast('已放弃修改','info');
   }).catch(function(e){
     showToast('放弃修改失败: ' + e.message, 'error');
+  });
   });
 }
 var unsaved = {newResearches: new Set(), newDeps: new Set()};
@@ -410,6 +430,7 @@ function renderRightPanel(){
 function onEnabledToggle(){if(!selectedResearch||savingResearches)return;selectedResearch.enabled=document.getElementById('edit-enabled').checked;var el=document.getElementById('enabled-label');el.textContent=selectedResearch.enabled?'已启用':'已禁用';el.style.color=selectedResearch.enabled?'#3fb950':'#f85149';markDirty();renderYamlPreview();renderGraph()}
 function onCostChange(){if(!selectedResearch||savingResearches)return;selectedResearch.levelCost=Math.max(0,parseInt(document.getElementById('edit-levelcost').value)||0);selectedResearch.moneyCost=Math.max(0,parseFloat(document.getElementById('edit-moneycost').value)||0);document.getElementById('edit-levelcost').value=selectedResearch.levelCost;document.getElementById('edit-moneycost').value=selectedResearch.moneyCost;markDirty();renderYamlPreview();buildResearchList(document.getElementById('research-search').value)}
 function updateLocPreview(){var v=document.getElementById('edit-locname').value;document.getElementById('loc-preview').innerHTML='预览: '+(v?MC.parseToHtml(v):'<span style="color:#484f58">空</span>')}
+function onLocNameFieldInput(){if(!selectedResearch)return;selectedResearch.name=document.getElementById('edit-locname').value;updateLocPreview();markDirty();renderCenterTop();buildResearchList(document.getElementById('research-search').value)}
 var skillsDef=[{icon:'⛏',key:'mining',label:'采掘'},{icon:'🌾',key:'farming',label:'农耕'},{icon:'🪓',key:'foraging',label:'采伐'},{icon:'🎣',key:'fishing',label:'钓鱼'},{icon:'🏹',key:'archery',label:'弓箭'},{icon:'🛡',key:'defense',label:'防御'},{icon:'⚔',key:'fighting',label:'战斗'},{icon:'💨',key:'agility',label:'敏捷'},{icon:'✨',key:'enchanting',label:'附魔'},{icon:'🧪',key:'alchemy',label:'炼金'},{icon:'🔨',key:'excavation',label:'挖掘'}];
 function renderSkills(){var g=document.getElementById('skill-grid'),h='';skillsDef.forEach(function(sk){var v=selectedResearch.skills[sk.key]||0;h+='<div class="skill-item"><span>'+sk.icon+'</span><span style="font-size:9px;color:#8b949e">'+sk.label+'</span><input type="number" value="'+v+'" min="0" data-sk="'+sk.key+'" onchange="onSkillChange(this)"/></div>'});g.innerHTML=h}
 function onSkillChange(input){if(!selectedResearch||savingResearches)return;selectedResearch.skills[input.getAttribute('data-sk')]=Math.max(0,parseInt(input.value)||0);input.value=selectedResearch.skills[input.getAttribute('data-sk')];markDirty();renderYamlPreview();renderGraph();showToast('技能已更新','info')}
@@ -665,26 +686,26 @@ loadResearches().then(function() {
 // ========== 创建/删除研究功能 ==========
 function createResearch() {
   if (savingResearches) return;
-  var key = prompt('输入研究 key（英文 ID，仅允许字母数字下划线）');
-  if (!key) return;
-  key = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  if (!key) { showToast('无效的研究 key', 'error'); return; }
-  var name = prompt('输入显示名称（支持 & 颜色代码）', key);
-  if (!name) return;
-  var namespace = 'slimefun';
-  fetch('/api/researches/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({namespace:namespace, key:key, name:name})})
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.error) { showToast('创建失败: ' + data.error, 'error'); return; }
-      showToast('已创建研究 ' + data.fullKey + '，重启后生效', 'success');
-      var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'SWR_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
-      researches.push(newR);
-      markDirty();
-      buildResearchList(document.getElementById('research-search').value);
-      autoLayout();
-      selectResearch(newR.key);
-    })
-    .catch(function(e){ showToast('创建失败: ' + e.message, 'error'); });
+  Dialog.prompt2('研究 Key（英文ID，仅允许字母数字下划线）', '', '显示名称（支持 & 颜色代码）', '', function(key, name) {
+    if (!key) { showToast('无效的研究 key', 'error'); return; }
+    key = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!key) { showToast('无效的研究 key', 'error'); return; }
+    if (!name) name = key;
+    var namespace = 'slimefun';
+    fetch('/api/researches/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({namespace:namespace, key:key, name:name})})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (data.error) { showToast('创建失败: ' + data.error, 'error'); return; }
+        showToast('已创建研究 ' + data.fullKey + '，重启后生效', 'success');
+        var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'SWR_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
+        researches.push(newR);
+        markDirty();
+        buildResearchList(document.getElementById('research-search').value);
+        autoLayout();
+        selectResearch(newR.key);
+      })
+      .catch(function(e){ showToast('创建失败: ' + e.message, 'error'); });
+  });
 }
 
 function deleteResearch() {
@@ -693,7 +714,7 @@ function deleteResearch() {
   var r = selectedResearch;
   var affectedCount = r.items ? r.items.length : 0;
   var descendantCount = r.descendants ? r.descendants.length : 0;
-  if (!confirm('确定删除研究「' + MC.strip(r.name) + '」？\n\n- 该研究绑定的 ' + affectedCount + ' 个物品将变为无需研究\n- ' + descendantCount + ' 个其他研究的前置依赖将被移除\n\n此操作重启后生效。')) return;
+  Dialog.confirm('确定删除研究「' + MC.escapeHtml(MC.strip(r.name)) + '」？<br><br>- 该研究绑定的 ' + affectedCount + ' 个物品将变为无需研究<br>- ' + descendantCount + ' 个其他研究的前置依赖将被移除<br><br>此操作重启后生效。', function() {
   var encodedKey = encodeURIComponent(r.fullKey);
   fetch('/api/researches/' + encodedKey, {method:'DELETE'})
     .then(function(rsp){ if (!rsp.ok) throw new Error('HTTP ' + rsp.status); return rsp.json(); })
@@ -708,6 +729,7 @@ function deleteResearch() {
       showToast('已删除研究，重启后生效', 'success');
     })
     .catch(function(e){ showToast('删除失败: ' + e.message, 'error'); });
+  });
 }
 
 function addItemToCurrentResearch(id, name) {

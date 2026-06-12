@@ -776,7 +776,7 @@ public class RecipeApiHandler implements HttpHandler {
         Material mat = Material.matchMaterial(id);
         if (mat != null) return new ItemStack(mat);
         SlimefunItem sfItem = IconParser.findSlimefunItem(id);
-        if (sfItem != null && sfItem.getRecipeOutput() != null) return sfItem.getRecipeOutput().clone();
+        if (sfItem != null && sfItem.getRecipeOutput() != null) { ItemStack s = sfItem.getRecipeOutput().clone(); s.setAmount(1); return s; }
         plugin.getLogger().warning("Unknown recipe item ID, using AIR: " + id);
         return new ItemStack(Material.AIR);
     }

@@ -47,6 +47,8 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .slot{width:56px;height:56px;background:#21262d;border:2px dashed #30363d;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;position:relative;font-size:10px;text-align:center;overflow:hidden;word-break:break-all;padding:2px;line-height:1.1}
 .slot:hover{border-color:#e94560;background:#2a1f2e}
 .slot.filled{border-style:solid;border-color:#30363d;background:#1a2230;color:#c9d1d9}
+.slot-remove{position:absolute;top:-1px;right:1px;font-size:10px;color:#f85149;cursor:pointer;line-height:1;padding:1px 2px;display:none;z-index:5}
+.slot.filled:hover .slot-remove{display:block}
 .oslot{width:64px;height:64px;background:#1a2f1a;border:2px solid #2ea043;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#3fb950;font-size:10px;gap:1px;overflow:hidden;text-align:center;line-height:1.1;padding:2px;word-break:break-all}
 .oslot span{font-size:10px;color:#8b949e}
 .arrow-dn{display:flex;align-items:center;justify-content:center;color:#484f58;font-size:20px;padding:2px}
@@ -89,6 +91,12 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center}
+.modal-box{background:#161b22;border:1px solid #30363d;border-radius:10px;min-width:300px;max-width:420px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.6);overflow:hidden}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #21262d;font-weight:600;font-size:13px;color:#e94560}
+.modal-body{padding:14px;font-size:12px;color:#c9d1d9;line-height:1.6}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #21262d}
+.btn-danger{background:#da3633;border-color:#da3633;color:#fff}
 </style></head><body>
 <div class="toolbar">
   <span class="tt">合成表编辑器</span>
@@ -143,6 +151,7 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="modal-overlay"></div>
 
 <script>
 var API_TOKEN = sessionStorage.getItem('scg_token') || '';
@@ -153,6 +162,13 @@ window.fetch = function(input, init) {
   init.headers = init.headers || {};
   if (API_TOKEN) init.headers['X-slimefunweaver-Token'] = API_TOKEN;
   return nativeFetch(input, init);
+};
+// ═══ Dialog ═══
+var Dialog={
+  _overlay:null,
+  _init:function(){if(!Dialog._overlay)Dialog._overlay=document.getElementById('modal-overlay')},
+  confirm:function(msg,cb){Dialog._init();Dialog._overlay.innerHTML='<div class="modal-box"><div class="modal-header"><span>确认</span><button class="btn btn-sm" onclick="Dialog.close()">\u2715</button></div><div class="modal-body">'+msg+'</div><div class="modal-footer"><button class="btn btn-sm" onclick="Dialog.close()">取消</button><button class="btn btn-danger btn-sm" id="dialog-confirm-btn">确定</button></div></div>';Dialog._overlay.style.display='flex';document.getElementById('dialog-confirm-btn').onclick=function(){Dialog.close();if(cb)cb(true)}},
+  close:function(){Dialog._overlay.style.display='none';Dialog._overlay.innerHTML=''}
 };
 
 var DLOG = [];
@@ -338,7 +354,7 @@ function setDirty(v) {
 
 function selectItem(id) {
   if (saving) { showToast('正在保存，请稍后再切换物品','info'); return; }
-  if (dirty && selectedItemId !== id && !confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？')) return;
+  if (dirty && selectedItemId !== id) { Dialog.confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？', function(){ doSelectItem(id); }); return; }
   if (selectedItemId === id) { if (dirty) return; doSelectItem(id); return; }
   if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
   pendingSelectTimer = setTimeout(function(){ if (saving) return; $id('center-empty').style.display = 'none'; $id('center-panel').style.display = ''; $id('center-panel').innerHTML = '<div style="text-align:center;color:#484f58;padding-top:60px;">加载中...</div>'; setDirty(false); doSelectItem(id); }, 40);
@@ -422,7 +438,7 @@ function renderGrid() {
     for (var i = 0; i < total; i++) {
       var s = slots[i];
       var cl = s && s.id !== 'AIR' ? 'slot filled' : 'slot';
-      var inner = s && s.id !== 'AIR' ? resolveDisplayName(s.id) : '<span style="font-size:18px;color:#484f58;">+</span>';
+      var inner = s && s.id !== 'AIR' ? resolveDisplayName(s.id) + '<span class="slot-remove" onclick="event.stopPropagation();clearSlot('+i+')">×</span>' : '<span style="font-size:18px;color:#484f58;">+</span>';
       h += '<div class="'+cl+'" onclick="openSlotPicker('+i+')">'+inner+'</div>';
     }
     h += '</div>';
@@ -570,6 +586,14 @@ function closePicker() {
   $id('overlay').classList.remove('show'); $id('popup').classList.remove('show');
 }
 
+function clearSlot(idx) {
+  if (saving) return;
+  slots[idx] = null;
+  renderGrid();
+  updateYaml();
+  setDirty(true);
+}
+
 function changeAmount(d) {
   if (saving) return;
   amount = Math.max(1, Math.min(64, amount + d));
@@ -637,8 +661,10 @@ function revertItem() {
 
 function revertFromServer() {
   if (saving) { showToast('正在保存，请稍后再重新加载','info'); return; }
-  if (dirty && !confirm('有未保存修改，确定从服务器重新加载并丢弃这些修改？')) return;
-  dlog('REVERT', 'revertFromServer: full reload from server');
+  if (dirty) { Dialog.confirm('有未保存修改，确定从服务器重新加载并丢弃这些修改？', function(){ doRevertFromServer(); }); return; }
+  doRevertFromServer();
+}
+function doRevertFromServer() {
   selectedItemId = null;
   $id('right-panel').style.display = 'none';
   $id('center-empty').style.display = 'block';

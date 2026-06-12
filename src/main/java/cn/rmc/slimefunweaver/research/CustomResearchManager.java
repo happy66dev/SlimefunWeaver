@@ -130,6 +130,16 @@ public class CustomResearchManager {
         }
     }
 
+    public static void resetAndReimport() throws Exception {
+        if (configFile.exists()) {
+            configFile.delete();
+        }
+        initialized = false;
+        importFromVanilla();
+        loadAndRegister();
+        initialized = true;
+    }
+    
     private static void loadAndRegister() {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         

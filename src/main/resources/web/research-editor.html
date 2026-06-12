@@ -186,6 +186,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <span>📁 研究列表</span>
     <div style="display:flex;gap:4px;align-items:center">
       <button class="btn btn-xs" onclick="createResearch()" title="创建新研究">+ 创建</button>
+      <button class="btn btn-xs" style="background:#da3633;border-color:#da3633;color:#fff" onclick="showResetResearchesDialog()" title="重置研究列表（删除所有自定义研究并重新导入）">🗑 重置</button>
     </div>
   </div>
   <input id="research-search" type="text" placeholder="搜索ID/物品名..." oninput="filterResearch()"/>
@@ -757,6 +758,52 @@ function removeItemFromResearch(itemId) {
   markDirty();
   renderCenterTop(selectedResearch);
   buildResearchList(document.getElementById('research-search').value);
+}
+
+function showResetResearchesDialog() {
+  if (savingResearches) return;
+  var count = researches.length;
+  Dialog.alert('⚠️ 重置研究列表<br><br>此操作将：<br>1. 删除所有自定义研究<br>2. 从原版 Slimefun 重新导入研究<br><br><b style="color:#e94560">当前共有 ' + count + ' 个研究</b><br><br><span id="reset-timer" style="color:#d2991d">请等待 5 秒...</span><br><br>输入 <b>"我知道我在做什么"</b> 以确认：<br><input type="text" id="reset-confirm-input" style="width:100%;margin-top:8px" disabled><br><br><button class="btn btn-sm btn-danger" id="reset-confirm-btn" disabled style="width:100%" onclick="doResetResearches()">确认重置</button>');
+  
+  var timer = 5;
+  var timerEl = document.getElementById('reset-timer');
+  var input = document.getElementById('reset-confirm-input');
+  var btn = document.getElementById('reset-confirm-btn');
+  
+  var interval = setInterval(function() {
+    timer--;
+    if (timer <= 0) {
+      clearInterval(interval);
+      timerEl.textContent = '可以输入确认';
+      timerEl.style.color = '#3fb950';
+      input.disabled = false;
+      input.focus();
+      input.oninput = function() {
+        btn.disabled = input.value !== '我知道我在做什么';
+      };
+    } else {
+      timerEl.textContent = '请等待 ' + timer + ' 秒...';
+    }
+  }, 1000);
+}
+
+function doResetResearches() {
+  Dialog.close();
+  showToast('正在重置研究列表...', 'info');
+  fetch('/api/researches/reset', {method:'POST'})
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function() {
+      showToast('研究列表已重置，正在重新加载...', 'success');
+      return loadResearches();
+    })
+    .then(function() {
+      selectedResearch = null;
+      buildResearchList('');
+      autoLayout();
+      rebuildItemOwnershipMap();
+      showToast('研究列表已重置并重新加载', 'success');
+    })
+    .catch(function(e) { showToast('重置失败: ' + e.message, 'error'); });
 }
 
 function toggleColorPicker(popup, input) {

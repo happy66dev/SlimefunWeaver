@@ -230,10 +230,21 @@ public class CustomResearchManager {
     }
     
     public static boolean researchExists(String fullKey) {
-        if (!configFile.exists()) return false;
+        if (!configFile.exists()) {
+            plugin.getLogger().info("[CRM] researchExists: configFile not exists");
+            return false;
+        }
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         ConfigurationSection sec = config.getConfigurationSection("researches");
-        return sec != null && sec.contains(fullKey);
+        if (sec == null) {
+            plugin.getLogger().info("[CRM] researchExists: researches section is null");
+            return false;
+        }
+        Set<String> keys = sec.getKeys(false);
+        plugin.getLogger().info("[CRM] researchExists: looking for '" + fullKey + "' in keys=" + keys);
+        boolean found = sec.contains(fullKey);
+        plugin.getLogger().info("[CRM] researchExists: found=" + found);
+        return found;
     }
     
     public static boolean isResearchEnabled(String fullKey, boolean fallback) {

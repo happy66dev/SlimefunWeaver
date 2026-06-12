@@ -155,6 +155,7 @@ public class ResearchApiHandler implements HttpHandler {
         if (!"DELETE".equalsIgnoreCase(method)) { exchange.sendResponseHeaders(405, -1); return; }
         
         String[] parts = path.split("/");
+        plugin.getLogger().info("[ResearchAPI] DELETE path=" + path + " parts=" + parts.length);
         if (parts.length < 4) { exchange.sendResponseHeaders(400, -1); return; }
         String fullKey;
         try { 
@@ -164,9 +165,12 @@ public class ResearchApiHandler implements HttpHandler {
             exchange.sendResponseHeaders(400, -1); 
             return;
         }
+        plugin.getLogger().info("[ResearchAPI] DELETE fullKey=" + fullKey);
         
         try {
-            if (!CustomResearchManager.researchExists(fullKey)) {
+            boolean exists = CustomResearchManager.researchExists(fullKey);
+            plugin.getLogger().info("[ResearchAPI] researchExists(" + fullKey + ")=" + exists);
+            if (!exists) {
                 exchange.sendResponseHeaders(404, -1);
                 return;
             }

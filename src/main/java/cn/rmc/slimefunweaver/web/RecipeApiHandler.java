@@ -26,6 +26,7 @@ import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeEntry;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.multiblocks.MultiBlockMachine;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -338,6 +339,18 @@ public class RecipeApiHandler implements HttpHandler {
                     names.put(stackId, displayNameFromStack(stack, stackId));
                 }
                 sb.append(defaultRecipeJson(id, rtKey, recipe));
+
+                // Include additional recipes from SlimefunItem
+                for (RecipeEntry entry : item.getAdditionalRecipes()) {
+                    sb.append(',');
+                    String entryRtKey = entry.getRecipeType().getKey().toString();
+                    ItemStack[] entryRecipe = entry.getRecipe();
+                    for (ItemStack stack : entryRecipe) {
+                        String stackId = itemIdFromStack(stack);
+                        names.put(stackId, displayNameFromStack(stack, stackId));
+                    }
+                    sb.append(defaultRecipeJson(id, entryRtKey, entryRecipe));
+                }
             }
             sb.append(']');
             sb.append('}');
@@ -667,6 +680,8 @@ public class RecipeApiHandler implements HttpHandler {
                             plugin.getLogger().log(Level.WARNING, "Failed to set processing time for " + itemId, e);
                         }
                     }
+                } else {
+                    item.addRecipe(rt, inputStacks, outputStack);
                 }
 
                 rt.register(inputStacks, outputStack);

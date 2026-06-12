@@ -224,24 +224,21 @@ public class CustomResearchManager {
     }
     
     public static boolean researchExists(String fullKey) {
-        File file = new File(plugin.getDataFolder(), "CustomResearches.yml");
-        if (!file.exists()) return false;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        if (!configFile.exists()) return false;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         return config.contains("researches." + fullKey);
     }
     
     public static boolean isResearchEnabled(String fullKey, boolean fallback) {
         if (plugin == null || fullKey == null) return fallback;
-        File file = new File(plugin.getDataFolder(), "CustomResearches.yml");
-        if (!file.exists()) return fallback;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        if (!configFile.exists()) return fallback;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         String path = "researches." + fullKey + ".enabled";
         return config.contains(path) ? config.getBoolean(path) : fallback;
     }
     
     public static void createResearch(String fullKey, String name) throws Exception {
-        File file = new File(plugin.getDataFolder(), "CustomResearches.yml");
-        YamlConfiguration config = file.exists() ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+        YamlConfiguration config = configFile.exists() ? YamlConfiguration.loadConfiguration(configFile) : new YamlConfiguration();
         
         if (!config.contains("enabled")) {
             config.set("enabled", true);
@@ -268,13 +265,12 @@ public class CustomResearchManager {
         skills.put("ALCHEMY", 0);
         config.createSection("researches." + fullKey + ".skills", skills);
         
-        config.save(file);
+        config.save(configFile);
     }
     
     public static void deleteResearch(String fullKey) throws Exception {
-        File file = new File(plugin.getDataFolder(), "CustomResearches.yml");
-        if (!file.exists()) return;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        if (!configFile.exists()) return;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         
         config.set("researches." + fullKey, null);
         
@@ -288,7 +284,7 @@ public class CustomResearchManager {
             }
         }
         
-        config.save(file);
+        config.save(configFile);
     }
     
     /**
@@ -299,8 +295,7 @@ public class CustomResearchManager {
      * @throws Exception 保存失败时抛出异常
      */
     public static void saveAllResearches(List<ResearchData> researches) throws Exception {
-        File file = new File(plugin.getDataFolder(), "CustomResearches.yml");
-        YamlConfiguration config = file.exists() ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+        YamlConfiguration config = configFile.exists() ? YamlConfiguration.loadConfiguration(configFile) : new YamlConfiguration();
         
         if (!config.contains("enabled")) {
             config.set("enabled", true);
@@ -329,7 +324,7 @@ public class CustomResearchManager {
             config.createSection("researches." + data.fullKey + ".skills", skills);
         }
         
-        config.save(file);
+        config.save(configFile);
     }
     
     public static class ResearchData {

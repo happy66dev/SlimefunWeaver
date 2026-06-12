@@ -561,7 +561,7 @@ public class RecipeApiHandler implements HttpHandler {
 
     static Map<String, List<Map<String, Object>>> parseRecipeSavePayload(String json) {
         Map<String, List<Map<String, Object>>> parsedRecipes = new LinkedHashMap<>();
-        JsonElement parsed = new JsonParser().parse(json);
+        JsonElement parsed = JsonParser.parseString(json);
         if (!parsed.isJsonObject()) return parsedRecipes;
         JsonObject rootObj = parsed.getAsJsonObject();
         if (!rootObj.has("items") || !rootObj.get("items").isJsonObject()) return parsedRecipes;

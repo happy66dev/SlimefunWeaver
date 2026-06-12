@@ -124,7 +124,7 @@ public class ResearchApiHandler implements HttpHandler {
         if (body == null || body.isEmpty()) { exchange.sendResponseHeaders(400, -1); return; }
         
         try {
-            JsonObject json = new JsonParser().parse(body).getAsJsonObject();
+            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
             String namespace = jsonString(json, "namespace");
             String key = jsonString(json, "key");
             String name = jsonString(json, "name");
@@ -160,7 +160,7 @@ public class ResearchApiHandler implements HttpHandler {
         try { 
             fullKey = java.net.URLDecoder.decode(parts[parts.length - 1], "UTF-8"); 
         } catch (Exception e) { 
-            plugin.getLogger().info("无法解码研究 ID: " + parts[parts.length - 1]);
+            plugin.getLogger().warning("无法解码研究 ID: " + parts[parts.length - 1]);
             exchange.sendResponseHeaders(400, -1); 
             return;
         }
@@ -196,7 +196,7 @@ public class ResearchApiHandler implements HttpHandler {
             for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
                 String name = item.getItemName(), id = item.getId();
                 String strippedName = ColorUtil.stripColorCodes(name);
-                if ((strippedName != null && strippedName.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) list.add(item);
+                if (strippedName.toLowerCase().contains(q) || id.toLowerCase().contains(q)) list.add(item);
             }
         } else {
             list = Slimefun.getRegistry().getEnabledSlimefunItems();
@@ -409,7 +409,7 @@ public class ResearchApiHandler implements HttpHandler {
 
     static List<ResearchUpdate> parseResearchSavePayload(String json) {
         List<ResearchUpdate> updates = new ArrayList<>();
-        JsonElement parsed = new JsonParser().parse(json);
+        JsonElement parsed = JsonParser.parseString(json);
         if (!parsed.isJsonObject()) return updates;
         JsonObject rootObj = parsed.getAsJsonObject();
         if (!rootObj.has("researches") || !rootObj.get("researches").isJsonArray()) return updates;

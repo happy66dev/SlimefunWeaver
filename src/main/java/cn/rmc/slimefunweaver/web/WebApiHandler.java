@@ -207,7 +207,7 @@ public class WebApiHandler implements HttpHandler {
 
         JsonElement parsed;
         try {
-            parsed = new JsonParser().parse(json);
+            parsed = JsonParser.parseString(json);
         } catch (Exception e) {
             return SaveResult.badRequest("invalid json");
         }
@@ -483,7 +483,7 @@ public class WebApiHandler implements HttpHandler {
                 String name = sfItem.getItemName();
                 String id = sfItem.getId();
                 String strippedName = ColorUtil.stripColorCodes(name);
-                if ((strippedName != null && strippedName.toLowerCase().contains(q)) || id.toLowerCase().contains(q)) {
+                if (strippedName.toLowerCase().contains(q) || id.toLowerCase().contains(q)) {
                     if (!first) sb.append(',');
                     sb.append("{\"type\":\"SLIMEFUN\",\"id\":\"").append(JsonUtil.escape(id));
                     sb.append("\",\"display\":\"").append(JsonUtil.escape(name != null ? name : id));

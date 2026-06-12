@@ -42,7 +42,7 @@ public final class VanillaMaterialLocalization {
 
         try (InputStream inputStream = VanillaMaterialLocalization.class.getResourceAsStream("/zh_cn.json")) {
             if (inputStream != null) {
-                JsonObject jsonObject = new JsonParser().parse(
+                JsonObject jsonObject = JsonParser.parseReader(
                                 new InputStreamReader(inputStream, StandardCharsets.UTF_8))
                         .getAsJsonObject();
 

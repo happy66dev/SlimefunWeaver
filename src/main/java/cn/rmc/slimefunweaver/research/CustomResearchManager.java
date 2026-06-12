@@ -45,6 +45,7 @@ public class CustomResearchManager {
     private static void importFromVanilla() {
         YamlConfiguration config = new YamlConfiguration();
         config.set("enabled", true);
+        ConfigurationSection researchesSec = config.createSection("researches");
         
         Map<String, Set<String>> researchItems = new HashMap<>();
         Map<String, Set<String>> itemToParents = new HashMap<>();
@@ -59,16 +60,18 @@ public class CustomResearchManager {
                 
                 String researchName;
                 try { researchName = r.getName(null); } catch (Exception ignored) { researchName = key; }
-                config.set("researches." + customKey + ".name", researchName);
-                config.set("researches." + customKey + ".level-cost", r.getLevelCost());
-                config.set("researches." + customKey + ".money-cost", r.getMoneyCost());
-                config.set("researches." + customKey + ".enabled", true);
+                
+                ConfigurationSection sec = researchesSec.createSection(customKey);
+                sec.set("name", researchName);
+                sec.set("level-cost", r.getLevelCost());
+                sec.set("money-cost", r.getMoneyCost());
+                sec.set("enabled", true);
                 
                 List<String> itemIds = new ArrayList<>();
                 for (SlimefunItem item : r.getAffectedItems()) {
                     itemIds.add(item.getId());
                 }
-                config.set("researches." + customKey + ".items", itemIds);
+                sec.set("items", itemIds);
                 
                 researchItems.put(customKey, new HashSet<>(itemIds));
                 
@@ -77,7 +80,7 @@ public class CustomResearchManager {
                     itemToParents.computeIfAbsent(needItemId, k -> new HashSet<>()).add(originalKey);
                 }
                 
-                config.set("researches." + customKey + ".parents", new ArrayList<>());
+                sec.set("parents", new ArrayList<>());
                 
                 Map<String, Object> skills = new LinkedHashMap<>();
                 skills.put("FARMING", r.getFarmingLevelNeed());
@@ -91,7 +94,7 @@ public class CustomResearchManager {
                 skills.put("AGILITY", r.getAgilityLevelNeed());
                 skills.put("ENCHANTING", r.getEnchantingLevelNeed());
                 skills.put("ALCHEMY", r.getAlchemyLevelNeed());
-                config.createSection("researches." + customKey + ".skills", skills);
+                sec.createSection("skills", skills);
                 
             } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to import research: " + r.getKey(), e);
@@ -115,7 +118,8 @@ public class CustomResearchManager {
                     }
                 }
             }
-            config.set("researches." + customKey + ".parents", parents);
+            ConfigurationSection sec = researchesSec.getConfigurationSection(customKey);
+            if (sec != null) sec.set("parents", parents);
         }
         
         try {
@@ -228,15 +232,19 @@ public class CustomResearchManager {
     public static boolean researchExists(String fullKey) {
         if (!configFile.exists()) return false;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        return config.contains("researches." + fullKey);
+        ConfigurationSection sec = config.getConfigurationSection("researches");
+        return sec != null && sec.contains(fullKey);
     }
     
     public static boolean isResearchEnabled(String fullKey, boolean fallback) {
         if (plugin == null || fullKey == null) return fallback;
         if (!configFile.exists()) return fallback;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        String path = "researches." + fullKey + ".enabled";
-        return config.contains(path) ? config.getBoolean(path) : fallback;
+        ConfigurationSection sec = config.getConfigurationSection("researches");
+        if (sec == null) return fallback;
+        ConfigurationSection r = sec.getConfigurationSection(fullKey);
+        if (r == null) return fallback;
+        return r.contains("enabled") ? r.getBoolean("enabled") : fallback;
     }
     
     public static void createResearch(String fullKey, String name) throws Exception {
@@ -246,12 +254,17 @@ public class CustomResearchManager {
             config.set("enabled", true);
         }
         
-        config.set("researches." + fullKey + ".name", name);
-        config.set("researches." + fullKey + ".level-cost", 0);
-        config.set("researches." + fullKey + ".money-cost", 0.0);
-        config.set("researches." + fullKey + ".enabled", true);
-        config.set("researches." + fullKey + ".items", new ArrayList<>());
-        config.set("researches." + fullKey + ".parents", new ArrayList<>());
+        ConfigurationSection researches = config.contains("researches") 
+            ? config.getConfigurationSection("researches") 
+            : config.createSection("researches");
+        if (researches == null) researches = config.createSection("researches");
+        ConfigurationSection sec = researches.createSection(fullKey);
+        sec.set("name", name);
+        sec.set("level-cost", 0);
+        sec.set("money-cost", 0.0);
+        sec.set("enabled", true);
+        sec.set("items", new ArrayList<>());
+        sec.set("parents", new ArrayList<>());
         
         Map<String, Object> skills = new LinkedHashMap<>();
         skills.put("FARMING", 0);
@@ -265,7 +278,7 @@ public class CustomResearchManager {
         skills.put("AGILITY", 0);
         skills.put("ENCHANTING", 0);
         skills.put("ALCHEMY", 0);
-        config.createSection("researches." + fullKey + ".skills", skills);
+        sec.createSection("skills", skills);
         
         config.save(configFile);
     }
@@ -274,15 +287,16 @@ public class CustomResearchManager {
         if (!configFile.exists()) return;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         
-        config.set("researches." + fullKey, null);
-        
         ConfigurationSection researchesSection = config.getConfigurationSection("researches");
-        if (researchesSection != null) {
-            for (String otherKey : researchesSection.getKeys(false)) {
-                List<String> parents = config.getStringList("researches." + otherKey + ".parents");
-                if (parents.remove(fullKey)) {
-                    config.set("researches." + otherKey + ".parents", parents);
-                }
+        if (researchesSection == null) return;
+        researchesSection.set(fullKey, null);
+        
+        for (String otherKey : researchesSection.getKeys(false)) {
+            ConfigurationSection other = researchesSection.getConfigurationSection(otherKey);
+            if (other == null) continue;
+            List<String> parents = other.getStringList("parents");
+            if (parents.remove(fullKey)) {
+                other.set("parents", parents);
             }
         }
         
@@ -303,13 +317,22 @@ public class CustomResearchManager {
             config.set("enabled", true);
         }
         
+        ConfigurationSection researchesSec = config.contains("researches")
+            ? config.getConfigurationSection("researches")
+            : config.createSection("researches");
+        if (researchesSec == null) researchesSec = config.createSection("researches");
+        
         for (ResearchData data : researches) {
-            config.set("researches." + data.fullKey + ".name", data.name);
-            config.set("researches." + data.fullKey + ".level-cost", data.levelCost);
-            config.set("researches." + data.fullKey + ".money-cost", data.moneyCost);
-            config.set("researches." + data.fullKey + ".enabled", data.enabled);
-            config.set("researches." + data.fullKey + ".items", data.items);
-            config.set("researches." + data.fullKey + ".parents", data.parents);
+            ConfigurationSection sec = researchesSec.contains(data.fullKey)
+                ? researchesSec.getConfigurationSection(data.fullKey)
+                : researchesSec.createSection(data.fullKey);
+            if (sec == null) sec = researchesSec.createSection(data.fullKey);
+            sec.set("name", data.name);
+            sec.set("level-cost", data.levelCost);
+            sec.set("money-cost", data.moneyCost);
+            sec.set("enabled", data.enabled);
+            sec.set("items", data.items);
+            sec.set("parents", data.parents);
             
             Map<String, Object> skills = new LinkedHashMap<>();
             skills.put("FARMING", data.farmingLevelNeed);
@@ -323,7 +346,7 @@ public class CustomResearchManager {
             skills.put("AGILITY", data.agilityLevelNeed);
             skills.put("ENCHANTING", data.enchantingLevelNeed);
             skills.put("ALCHEMY", data.alchemyLevelNeed);
-            config.createSection("researches." + data.fullKey + ".skills", skills);
+            sec.createSection("skills", skills);
         }
         
         config.save(configFile);

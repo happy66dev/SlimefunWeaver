@@ -58,11 +58,17 @@ public class CustomResearchManager {
                 String key = parts.length > 1 ? parts[1] : parts[0];
                 String customKey = namespace + ":" + RESEARCH_PREFIX + key;
                 
-                String researchName;
-                try { researchName = r.getName(null); } catch (Exception ignored) { researchName = key; }
+                String researchName = r.getUnlocalizedName();
+                Map<String, String> localizedNames = getLocalizedNames(r);
                 
                 ConfigurationSection sec = researchesSec.createSection(customKey);
                 sec.set("name", researchName);
+                if (!localizedNames.isEmpty()) {
+                    ConfigurationSection namesSec = sec.createSection("names");
+                    for (Map.Entry<String, String> entry : localizedNames.entrySet()) {
+                        namesSec.set(entry.getKey(), entry.getValue());
+                    }
+                }
                 sec.set("level-cost", r.getLevelCost());
                 sec.set("money-cost", r.getMoneyCost());
                 sec.set("enabled", true);
@@ -135,9 +141,46 @@ public class CustomResearchManager {
             configFile.delete();
         }
         initialized = false;
-        importFromVanilla();
+        nextResearchId.set(100000);
         loadAndRegister();
         initialized = true;
+    }
+    
+    private static Map<String, String> getLocalizedNames(Research research) {
+        Map<String, String> names = new LinkedHashMap<>();
+        try {
+            for (org.bukkit.entity.Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                String langCode = Slimefun.getLocalization().getLanguage(onlinePlayer).getId();
+                String localizedName = research.getName(onlinePlayer);
+                if (!localizedName.equals(research.getUnlocalizedName())) {
+                    names.put(langCode, localizedName);
+                }
+            }
+        } catch (Exception ignored) {}
+        return names;
+    }
+    
+    private static void registerLocalizedNames(NamespacedKey researchKey, ConfigurationSection namesSec) {
+        try {
+            File langDir = new File(plugin.getDataFolder().getParentFile(), "Slimefun/languages/researches");
+            if (!langDir.exists()) {
+                langDir.mkdirs();
+            }
+            
+            for (String langCode : namesSec.getKeys(false)) {
+                String name = namesSec.getString(langCode);
+                if (name != null && !name.isEmpty()) {
+                    File langFile = new File(langDir, langCode + ".yml");
+                    YamlConfiguration langConfig = langFile.exists() 
+                        ? YamlConfiguration.loadConfiguration(langFile) 
+                        : new YamlConfiguration();
+                    langConfig.set(researchKey.getNamespace() + "." + researchKey.getKey(), name);
+                    langConfig.save(langFile);
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to register localized names for " + researchKey, e);
+        }
     }
     
     private static void loadAndRegister() {
@@ -190,6 +233,11 @@ public class CustomResearchManager {
         
         Research research = new Research(nsKey, nextResearchId.getAndIncrement(), name, levelCost);
         research.setMoneyCost(moneyCost);
+        
+        ConfigurationSection namesSec = config.getConfigurationSection("names");
+        if (namesSec != null) {
+            registerLocalizedNames(nsKey, namesSec);
+        }
         
         List<String> itemIds = config.getStringList("items");
         List<SlimefunItem> items = new ArrayList<>();

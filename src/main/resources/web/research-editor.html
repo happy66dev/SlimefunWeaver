@@ -319,7 +319,7 @@ function saveResearches() {
   var payload = {researches: researches.map(function(r) {
     clampResearch(r);
     var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
-    r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items[0]) needItems.push(pr.items[0].id); } });
+    r.parents.forEach(function(pk) { if (!needItems.some(function(id) { return itemToResearch[id] === pk; })) { var pr = researches.find(function(rr) { return rr.key === pk; }); if (pr && pr.items && pr.items.length > 0) needItems.push(pr.items[0].id || pr.items[0]); } });
     var itemIds = (r.items || []).map(function(it) { return typeof it === 'string' ? it : it.id; });
     return {fullKey: r.fullKey || r.key, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: itemIds, parents: r.parents || [], needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};

@@ -423,7 +423,8 @@ public class RecipeApiHandler implements HttpHandler {
 
     private static String recipeToJson(Map<?, ?> r, String fallbackId) {
         String type = String.valueOf(r.get("type"));
-        List<?> inputList = (List<?>) r.get("input");
+        Object rawInput = r.get("input");
+        List<?> inputList = rawInput instanceof List ? (List<?>) rawInput : Collections.emptyList();
         String output = r.get("output") != null ? String.valueOf(r.get("output")) : fallbackId;
         int amount = toInt(r.get("output-amount"), 1);
         int time = toInt(r.get("processing-time"), 0);
@@ -654,14 +655,16 @@ public class RecipeApiHandler implements HttpHandler {
                 Object outputVal = recipeMap.get("output");
                 int outputAmount = clamp(toInt(recipeMap.get("output-amount"), 1), 1, 64);
 
-                ItemStack[] inputStacks = new ItemStack[9];
-                for (int i = 0; i < Math.min(inputList.size(), 9); i++) {
+                int expectedSlots = guessSlots(typeKey);
+                ItemStack[] inputStacks = new ItemStack[expectedSlots];
+                for (int i = 0; i < Math.min(inputList.size(), expectedSlots); i++) {
                     String matId = String.valueOf(inputList.get(i));
                     inputStacks[i] = resolveItemStack(matId);
                 }
 
                 String outId = outputVal != null ? String.valueOf(outputVal) : itemId;
                 ItemStack outputStack = resolveItemStack(outId);
+                if (outputStack == null) outputStack = new ItemStack(Material.AIR);
                 outputStack.setAmount(outputAmount);
 
                 if (isFirstRecipe) {
@@ -773,7 +776,7 @@ public class RecipeApiHandler implements HttpHandler {
 
         void restore(SlimefunItem item) {
             item.setRecipeType(type);
-            if (recipe != null && recipe.length == 9) {
+            if (recipe != null) {
                 item.setRecipe(Arrays.stream(recipe).map(stack -> stack == null ? null : stack.clone()).toArray(ItemStack[]::new));
             }
             if (output != null) {

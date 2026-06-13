@@ -151,7 +151,9 @@ public class CustomResearchManager {
         Map<String, String> names = new LinkedHashMap<>();
         try {
             for (org.bukkit.entity.Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                String langCode = Slimefun.getLocalization().getLanguage(onlinePlayer).getId();
+                io.github.thebusybiscuit.slimefun4.core.services.localization.Language lang = Slimefun.getLocalization().getLanguage(onlinePlayer);
+                if (lang == null) continue;
+                String langCode = lang.getId();
                 String localizedName = research.getName(onlinePlayer);
                 if (!localizedName.equals(research.getUnlocalizedName())) {
                     names.put(langCode, localizedName);

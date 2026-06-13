@@ -690,7 +690,11 @@ function save() {
   var savingItemName = originalItemName;
   var savingDirtyVersion = dirtyVersion;
   var recipeList = recipesData.filter(function(r){return !isNullRecipeType(r.type);}).map(function(r){
-    return {type: r.type, input: r.input, output: r.output, outputAmount: r.outputAmount || 1, processingTime: r.processingTime || 0};
+    var typeInfo = getTypeInfo(r.type);
+    var expectedSlots = typeInfo.slots || 9;
+    var trimmedInput = (r.input || []).slice(0, expectedSlots);
+    while (trimmedInput.length < expectedSlots) trimmedInput.push('AIR');
+    return {type: r.type, input: trimmedInput, output: r.output, outputAmount: r.outputAmount || 1, processingTime: r.processingTime || 0};
   });
   var firstRecipe = recipeList[0];
   var payload = {items:{}};

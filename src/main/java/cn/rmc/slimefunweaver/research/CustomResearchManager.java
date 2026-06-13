@@ -142,6 +142,7 @@ public class CustomResearchManager {
         }
         initialized = false;
         nextResearchId.set(100000);
+        importFromVanilla();
         loadAndRegister();
         initialized = true;
     }

@@ -18,7 +18,7 @@ import java.util.logging.Level;
 
 public class CustomResearchManager {
 
-    public static final String RESEARCH_PREFIX = "SWR_";
+    public static final String RESEARCH_PREFIX = "swr_";
     
     private static SlimefunWeaver plugin;
     private static File configFile;
@@ -142,7 +142,6 @@ public class CustomResearchManager {
         }
         initialized = false;
         nextResearchId.set(100000);
-        importFromVanilla();
         loadAndRegister();
         initialized = true;
     }

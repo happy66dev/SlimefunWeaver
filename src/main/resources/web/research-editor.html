@@ -699,7 +699,7 @@ function createResearch() {
       .then(function(data) {
         if (data.error) { showToast('创建失败: ' + data.error, 'error'); return; }
         showToast('已创建研究 ' + data.fullKey + '，重启后生效', 'success');
-        var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'SWR_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
+        var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'swr_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
         researches.push(newR);
         markDirty();
         buildResearchList(document.getElementById('research-search').value);

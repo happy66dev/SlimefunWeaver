@@ -137,14 +137,17 @@ public class CustomResearchManager {
     }
 
     public static void clearAllResearches() throws Exception {
+        plugin.getLogger().info("[CRM] CLEAR configFile.exists=" + configFile.exists());
         YamlConfiguration empty = new YamlConfiguration();
         empty.set("enabled", true);
         empty.createSection("researches");
         empty.save(configFile);
         initialized = false;
         nextResearchId.set(100000);
+        plugin.getLogger().info("[CRM] CLEAR saved empty config, reloading");
         loadAndRegister();
         initialized = true;
+        plugin.getLogger().info("[CRM] CLEAR done");
     }
     
     private static Map<String, String> getLocalizedNames(Research research) {
@@ -186,17 +189,44 @@ public class CustomResearchManager {
         }
     }
     
+    private static int unregisterOldCustomResearches() {
+        int removed = 0;
+        java.util.Iterator<Research> it = Slimefun.getRegistry().getResearches().iterator();
+        while (it.hasNext()) {
+            Research r = it.next();
+            try {
+                String rKey = r.getKey().getKey();
+                if (rKey.startsWith(RESEARCH_PREFIX)) {
+                    for (SlimefunItem item : new ArrayList<>(r.getAffectedItems())) {
+                        if (item != null && item.getResearch() == r) {
+                            item.setResearch(null);
+                        }
+                    }
+                    it.remove();
+                    removed++;
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "[CRM] Failed to unregister research", e);
+            }
+        }
+        return removed;
+    }
+    
     private static void loadAndRegister() {
+        plugin.getLogger().info("[CRM] LOAD configFile=" + configFile.getAbsolutePath() + " exists=" + configFile.exists());
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         
         if (!config.getBoolean("enabled", false)) {
-            plugin.getLogger().info("Custom research system is disabled in config");
+            plugin.getLogger().info("[CRM] LOAD custom research system disabled");
             return;
         }
+
+        int removed = unregisterOldCustomResearches();
+        plugin.getLogger().info("[CRM] LOAD removed " + removed + " old custom researches from registry");
         
         ConfigurationSection researchesSection = config.getConfigurationSection("researches");
         if (researchesSection == null) {
-            plugin.getLogger().warning("No researches found in CustomResearches.yml");
+            plugin.getLogger().warning("[CRM] LOAD no researches section");
             return;
         }
         
@@ -208,15 +238,17 @@ public class CustomResearchManager {
             }
         }
         
+        plugin.getLogger().info("[CRM] LOAD " + researchConfigs.size() + " research configs");
+        
         for (Map.Entry<String, ConfigurationSection> entry : researchConfigs.entrySet()) {
             try {
                 registerOne(entry.getKey(), entry.getValue(), researchConfigs);
             } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "Failed to register research: " + entry.getKey(), e);
+                plugin.getLogger().log(Level.WARNING, "[CRM] LOAD failed to register: " + entry.getKey(), e);
             }
         }
         
-        plugin.getLogger().info("Registered " + researchConfigs.size() + " custom researches");
+        plugin.getLogger().info("[CRM] LOAD registered " + researchConfigs.size() + " custom researches");
     }
 
     private static void registerOne(String fullKey, ConfigurationSection config, Map<String, ConfigurationSection> allConfigs) {
@@ -356,23 +388,50 @@ public class CustomResearchManager {
     }
     
     public static void deleteResearch(String fullKey) throws Exception {
+        plugin.getLogger().info("[CRM] DELETE " + fullKey + " configFile.exists=" + configFile.exists());
         if (!configFile.exists()) return;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         
         ConfigurationSection researchesSection = config.getConfigurationSection("researches");
-        if (researchesSection == null) return;
+        if (researchesSection == null) {
+            plugin.getLogger().info("[CRM] DELETE " + fullKey + " researchesSection is null");
+            return;
+        }
+        boolean existed = researchesSection.contains(fullKey);
         researchesSection.set(fullKey, null);
+        plugin.getLogger().info("[CRM] DELETE " + fullKey + " existed=" + existed);
         
+        int parentCleaned = 0;
         for (String otherKey : researchesSection.getKeys(false)) {
             ConfigurationSection other = researchesSection.getConfigurationSection(otherKey);
             if (other == null) continue;
             List<String> parents = other.getStringList("parents");
             if (parents.remove(fullKey)) {
                 other.set("parents", parents);
+                parentCleaned++;
             }
         }
         
+        plugin.getLogger().info("[CRM] DELETE " + fullKey + " parentCleaned=" + parentCleaned);
         config.save(configFile);
+
+        try {
+            for (java.util.Iterator<Research> it = Slimefun.getRegistry().getResearches().iterator(); it.hasNext(); ) {
+                Research r = it.next();
+                if (r.getKey().toString().equals(fullKey)) {
+                    for (SlimefunItem item : new ArrayList<>(r.getAffectedItems())) {
+                        if (item != null && item.getResearch() == r) {
+                            item.setResearch(null);
+                        }
+                    }
+                    it.remove();
+                    plugin.getLogger().info("[CRM] DELETE removed " + fullKey + " from registry");
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "[CRM] DELETE failed to remove " + fullKey + " from registry", e);
+        }
     }
     
     /**

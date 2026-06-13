@@ -50,6 +50,8 @@ public class ResearchApiHandler implements HttpHandler {
             String path = exchange.getRequestURI().getPath();
             String method = exchange.getRequestMethod();
 
+            plugin.getLogger().info("[ResearchAPI] " + method + " " + path);
+
             if (path.equals("/editor.html")) {
                 if (!WebSecurity.isAccessAllowed(plugin, exchange)) { redirectToLogin(exchange); return; }
                 serveHtml(exchange, editorHtml);
@@ -171,9 +173,10 @@ public class ResearchApiHandler implements HttpHandler {
         
         try {
             CustomResearchManager.deleteResearch(fullKey);
+            plugin.getLogger().info("[ResearchAPI] DELETE ok");
             serveJson(exchange, "{\"ok\":true}");
         } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to delete research", e);
+            plugin.getLogger().log(Level.WARNING, "[ResearchAPI] DELETE failed for " + fullKey, e);
             exchange.sendResponseHeaders(500, -1);
         }
     }
@@ -183,11 +186,13 @@ public class ResearchApiHandler implements HttpHandler {
         if (!WebSecurity.isWriteAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
         if (!"POST".equalsIgnoreCase(method)) { exchange.sendResponseHeaders(405, -1); return; }
         
+        plugin.getLogger().info("[ResearchAPI] CLEAR all researches");
         try {
             CustomResearchManager.clearAllResearches();
+            plugin.getLogger().info("[ResearchAPI] CLEAR ok");
             serveJson(exchange, "{\"ok\":true}");
         } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to clear researches", e);
+            plugin.getLogger().log(Level.WARNING, "[ResearchAPI] CLEAR failed", e);
             exchange.sendResponseHeaders(500, -1);
         }
     }
@@ -300,7 +305,9 @@ public class ResearchApiHandler implements HttpHandler {
             if (!firstM) sb.append(','); firstM = false;
             sb.append('"').append(escapeJson(e.getKey())).append("\":\"").append(escapeJson(e.getValue())).append('"');
         }
-        sb.append("}}"); return sb.toString();
+        sb.append("}}");
+        plugin.getLogger().info("[ResearchAPI] GET built " + sb.length() + " chars json");
+        return sb.toString();
     }
 
     private String safeResearchKey(Research r) {
@@ -367,9 +374,10 @@ public class ResearchApiHandler implements HttpHandler {
         try {
             updates = parseResearchSavePayload(json);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Invalid research save payload", e);
+            plugin.getLogger().log(Level.WARNING, "[ResearchAPI] Invalid research save payload", e);
             return false;
         }
+        plugin.getLogger().info("[ResearchAPI] SAVE parsing " + updates.size() + " researches");
         try {
             runSync(() -> {
                 List<CustomResearchManager.ResearchData> researches = new ArrayList<>();
@@ -400,11 +408,11 @@ public class ResearchApiHandler implements HttpHandler {
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-                plugin.getLogger().info("CustomResearches.yml saved via web editor (" + researches.size() + " researches)");
+                plugin.getLogger().info("[ResearchAPI] SAVE ok (" + researches.size() + " researches)");
             });
             return true;
         } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to save CustomResearches.yml via web editor", e);
+            plugin.getLogger().log(Level.WARNING, "[ResearchAPI] SAVE failed", e);
             return false;
         }
     }

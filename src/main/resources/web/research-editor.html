@@ -245,6 +245,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="arrow-delete-bar"><span id="arrow-info"></span><button class="btn btn-xs btn-danger" onclick="deleteSelectedArrow()">🗑 删除</button><button class="btn btn-xs" onclick="deselectArrow()">✕</button></div>
 <div class="color-picker-popup" id="color-picker"></div>
 <div id="toast"></div>
+<div id="debug-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;height:160px;background:#0d1117e8;border-top:1px solid #30363d;z-index:400;overflow-y:auto;font-family:'SF Mono','Consolas',monospace;font-size:10px;padding:6px 10px;line-height:1.5;color:#8b949e" onclick="this.scrollTop=this.scrollHeight"></div>
+<button id="debug-toggle" style="position:fixed;bottom:4px;right:8px;z-index:401;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:10px;padding:2px 6px;cursor:pointer" onclick="var p=document.getElementById('debug-panel');var s=p.style.display==='none'?'block':'none';p.style.display=s;this.textContent=s==='none'?'🐛':'✕'">🐛</button>
 <div id="modal-overlay"></div>
 <div class="color-picker-popup" id="item-picker-popup" style="width:340px;max-height:360px;overflow-y:auto">
   <div style="font-size:11px;font-weight:600;color:#e94560;margin-bottom:6px">➕ 添加物品到当前研究</div>
@@ -264,6 +266,25 @@ window.fetch = function(input, init) {
   }
   return nativeFetch(input, init);
 };
+// ═══ Debug Logging ═══
+var DLOG = [];
+function dlog(tag, msg) {
+  var ts = new Date().toISOString().slice(11,23);
+  var entry = '[' + ts + '] [' + tag + '] ' + msg;
+  DLOG.push(entry);
+  if (DLOG.length > 200) DLOG.shift();
+  var panel = document.getElementById('debug-panel');
+  if (panel) {
+    panel.innerHTML = DLOG.map(function(e){
+      var cls = e.indexOf('[WARN]') >= 0 ? 'dl-warn' : (e.indexOf('[ERR]') >= 0 ? 'dl-error' : 'dl-info');
+      return '<span style="color:'+(cls==='dl-warn'?'#d29922':cls==='dl-error'?'#f85149':'#8b949e')+'">' + esc(e) + '</span>';
+    }).join('\n');
+    panel.scrollTop = panel.scrollHeight;
+  }
+  console.log('[研究编辑器] ['+tag+'] '+msg);
+}
+function dlogErr(tag, msg) { dlog(tag, '[ERR] ' + msg); }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 // ═══ MC Color Parser ═══
 var MC={
   colors:{0:'#000',1:'#00A',2:'#0A0',3:'#0AA',4:'#A00',5:'#A0A',6:'#FA0',7:'#AAA',8:'#555',9:'#55F',a:'#5F5',b:'#5FF',c:'#F55',d:'#F5F',e:'#FF5',f:'#FFF'},
@@ -300,6 +321,7 @@ function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").repla
 // 内部工具，数据源为Slimefun注册表，无XSS威胁
 function escJS(s){if(!s)return'';return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r')}
 function apiToInternal(apiJson) {
+  dlog('PARSE','apiToInternal: researches='+(apiJson.researches||[]).length+' itemToResearch keys='+Object.keys(apiJson.itemToResearch||{}).length);
   itemToResearch = apiJson.itemToResearch || {};
   var list = (apiJson.researches || []).map(function(r) {
     var fullKey = r.fullKey || ((r.namespace || 'slimefun') + ':' + r.key);
@@ -309,13 +331,15 @@ function apiToInternal(apiJson) {
   return list;
 }
 function loadResearches() {
-  return fetch("/api/researches").then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(json) { researches = apiToInternal(json); updateToolbarStats(); return researches; });
+  dlog('LOAD','GET /api/researches');
+  return fetch("/api/researches").then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(json) { researches = apiToInternal(json); updateToolbarStats(); dlog('LOAD','loaded '+researches.length+' researches, itemToResearch keys='+Object.keys(itemToResearch).length); return researches; }).catch(function(e){ dlogErr('LOAD',e.message); throw e; });
 }
 function clampResearch(r){r.levelCost=Math.max(0,parseInt(r.levelCost)||0);r.moneyCost=Math.max(0,parseFloat(r.moneyCost)||0);Object.keys(r.skills||{}).forEach(function(k){r.skills[k]=Math.max(0,parseInt(r.skills[k])||0)});return r}
 function saveResearches() {
   if(savingResearches)return;
   savingResearches=true;var btn=document.getElementById('btn-save-researches');if(btn){btn.disabled=true;btn.textContent='保存中...'}
   var savingDirtyVersion = dirtyVersion;
+  dlog('SAVE','saving '+researches.length+' researches, dirtyVersion='+savingDirtyVersion);
   var payload = {researches: researches.map(function(r) {
     clampResearch(r);
     var needItems = (r.needUnlockedItems || []).filter(function(id) { var mapped = itemToResearch[id]; return !mapped || r.parents.indexOf(mapped) >= 0; });
@@ -323,7 +347,7 @@ function saveResearches() {
     var itemIds = (r.items || []).map(function(it) { return typeof it === 'string' ? it : it.id; });
     return {fullKey: r.fullKey || r.key, name: r.name, levelCost: r.levelCost, moneyCost: r.moneyCost, enabled: r.enabled, items: itemIds, parents: r.parents || [], needUnlockedItems: needItems, miningLevelNeed: r.skills.mining || 0, farmingLevelNeed: r.skills.farming || 0, foragingLevelNeed: r.skills.foraging || 0, fishingLevelNeed: r.skills.fishing || 0, excavationLevelNeed: r.skills.excavation || 0, archeryLevelNeed: r.skills.archery || 0, defenseLevelNeed: r.skills.defense || 0, fightingLevelNeed: r.skills.fighting || 0, agilityLevelNeed: r.skills.agility || 0, enchantingLevelNeed: r.skills.enchanting || 0, alchemyLevelNeed: r.skills.alchemy || 0};
   })};
-  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});if(saved)r.needUnlockedItems=saved.needUnlockedItems});if(dirtyVersion===savingDirtyVersion){unsaved={newResearches:new Set(),newDeps:new Set()};clearDirty()}else if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}savingResearches=false;buildResearchList(document.getElementById("research-search").value);renderGraph();showToast("保存成功","success");}).catch(function(e){savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}showToast("保存失败: "+e.message,"error");});
+  return fetch("/api/researches", {method: "PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000)}).then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function() { researches.forEach(function(r){var saved=payload.researches.find(function(p){return p.fullKey === (r.fullKey || r.key)});if(saved)r.needUnlockedItems=saved.needUnlockedItems});if(dirtyVersion===savingDirtyVersion){unsaved={newResearches:new Set(),newDeps:new Set()};clearDirty()}else if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}savingResearches=false;buildResearchList(document.getElementById("research-search").value);renderGraph();dlog('SAVE','ok, '+payload.researches.length+' researches saved');showToast("保存成功","success");}).catch(function(e){savingResearches=false;if(btn){btn.disabled=false;btn.textContent='💾 保存 *'}dlogErr('SAVE',e.message);showToast("保存失败: "+e.message,"error");});
 }
 function discardChanges(){
   if(savingResearches){showToast('正在保存，请稍后再放弃修改','info');return}
@@ -694,10 +718,12 @@ function createResearch() {
     if (!key) { showToast('无效的研究 key', 'error'); return; }
     if (!name) name = key;
     var namespace = 'slimefun';
+    dlog('CREATE','POST /api/researches/create ns='+namespace+' key='+key);
     fetch('/api/researches/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({namespace:namespace, key:key, name:name})})
       .then(function(r){ return r.json(); })
       .then(function(data) {
-        if (data.error) { showToast('创建失败: ' + data.error, 'error'); return; }
+        if (data.error) { dlogErr('CREATE',data.error); showToast('创建失败: ' + data.error, 'error'); return; }
+        dlog('CREATE','ok fullKey='+data.fullKey);
         showToast('已创建研究 ' + data.fullKey + '，重启后生效', 'success');
         var newR = {key:data.fullKey, fullKey:data.fullKey, namespace:namespace, shortKey:'swr_'+key, name:name, levelCost:0, moneyCost:0, enabled:true, items:[], parents:[], needUnlockedItems:[], descendants:[], skills:{}, x:0, y:0};
         researches.push(newR);
@@ -706,7 +732,7 @@ function createResearch() {
         autoLayout();
         selectResearch(newR.key);
       })
-      .catch(function(e){ showToast('创建失败: ' + e.message, 'error'); });
+      .catch(function(e){ dlogErr('CREATE',e.message); showToast('创建失败: ' + e.message, 'error'); });
   });
 }
 
@@ -714,10 +740,12 @@ function deleteResearch() {
   if (!selectedResearch) { showToast('请先选中一个研究', 'info'); return; }
   if (savingResearches) return;
   var r = selectedResearch;
+  dlog('DELETE','deleting research key='+r.key+' fullKey='+r.fullKey);
   var affectedCount = r.items ? r.items.length : 0;
   var descendantCount = r.descendants ? r.descendants.length : 0;
   Dialog.confirm('确定删除研究「' + MC.escapeHtml(MC.strip(r.name)) + '」？<br><br>- 该研究绑定的 ' + affectedCount + ' 个物品将变为无需研究<br>- ' + descendantCount + ' 个其他研究的前置依赖将被移除<br><br>此操作重启后生效。', function() {
   var encodedKey = encodeURIComponent(r.fullKey);
+  dlog('DELETE','fetch DELETE /api/researches/'+encodedKey);
   fetch('/api/researches/' + encodedKey, {method:'DELETE'})
     .then(function(rsp){ if (!rsp.ok) throw new Error('HTTP ' + rsp.status); return rsp.json(); })
     .then(function() {
@@ -728,9 +756,10 @@ function deleteResearch() {
       markDirty();
       buildResearchList(document.getElementById('research-search').value);
       autoLayout();
+      dlog('DELETE','ok, '+researches.length+' researches remaining');
       showToast('已删除研究，重启后生效', 'success');
     })
-    .catch(function(e){ showToast('删除失败: ' + e.message, 'error'); });
+    .catch(function(e){ dlogErr('DELETE',e.message); showToast('删除失败: ' + e.message, 'error'); });
   });
 }
 
@@ -789,10 +818,12 @@ function showClearResearchesDialog() {
 
 function doClearResearches() {
   Dialog.close();
+  dlog('CLEAR','POST /api/researches/clear');
   showToast('正在清空研究列表...', 'info');
   fetch('/api/researches/clear', {method:'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function() {
+      dlog('CLEAR','ok, reloading researches');
       showToast('研究列表已清空，正在重新加载...', 'success');
       return loadResearches();
     })
@@ -801,9 +832,10 @@ function doClearResearches() {
       buildResearchList('');
       autoLayout();
       rebuildItemOwnershipMap();
+      dlog('CLEAR','reload done, '+researches.length+' researches');
       showToast('研究列表已清空并重新加载', 'success');
     })
-    .catch(function(e) { showToast('清空失败: ' + e.message, 'error'); });
+    .catch(function(e) { dlogErr('CLEAR',e.message); showToast('清空失败: ' + e.message, 'error'); });
 }
 
 function toggleColorPicker(popup, input) {

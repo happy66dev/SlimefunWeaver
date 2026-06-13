@@ -136,7 +136,7 @@ public class CustomResearchManager {
         }
     }
 
-    public static void resetAndReimport() throws Exception {
+    public static void clearAllResearches() throws Exception {
         if (configFile.exists()) {
             configFile.delete();
         }

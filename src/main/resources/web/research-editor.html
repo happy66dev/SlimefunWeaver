@@ -186,7 +186,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <span>📁 研究列表</span>
     <div style="display:flex;gap:4px;align-items:center">
       <button class="btn btn-xs" onclick="createResearch()" title="创建新研究">+ 创建</button>
-      <button class="btn btn-xs" style="background:#da3633;border-color:#da3633;color:#fff" onclick="showResetResearchesDialog()" title="重置研究列表（删除所有自定义研究并重新导入）">🗑 重置</button>
+      <button class="btn btn-xs" style="background:#da3633;border-color:#da3633;color:#fff" onclick="showClearResearchesDialog()" title="清空所有研究数据">🗑 清空</button>
     </div>
   </div>
   <input id="research-search" type="text" placeholder="搜索ID/物品名..." oninput="filterResearch()"/>
@@ -760,15 +760,15 @@ function removeItemFromResearch(itemId) {
   buildResearchList(document.getElementById('research-search').value);
 }
 
-function showResetResearchesDialog() {
+function showClearResearchesDialog() {
   if (savingResearches) return;
   var count = researches.length;
-  Dialog.alert('⚠️ 重置研究列表<br><br>此操作将：<br>1. 删除所有自定义研究<br>2. 从原版 Slimefun 重新导入研究<br><br><b style="color:#e94560">当前共有 ' + count + ' 个研究</b><br><br><span id="reset-timer" style="color:#d2991d">请等待 5 秒...</span><br><br>输入 <b>"我知道我在做什么"</b> 以确认：<br><input type="text" id="reset-confirm-input" style="width:100%;margin-top:8px" disabled><br><br><button class="btn btn-sm btn-danger" id="reset-confirm-btn" disabled style="width:100%" onclick="doResetResearches()">确认重置</button>');
+  Dialog.alert('⚠️ 清空研究列表<br><br>此操作将<b style="color:#e94560">删除所有自定义研究数据</b><br><br><b style="color:#da3633">当前共有 ' + count + ' 个研究</b><br><br><span id="clear-timer" style="color:#d2991d">请等待 5 秒...</span><br><br>输入 <b>"我知道我在做什么"</b> 以确认：<br><input type="text" id="clear-confirm-input" style="width:100%;margin-top:8px" disabled><br><br><button class="btn btn-sm btn-danger" id="clear-confirm-btn" disabled style="width:100%" onclick="doClearResearches()">确认清空</button>');
   
   var timer = 5;
-  var timerEl = document.getElementById('reset-timer');
-  var input = document.getElementById('reset-confirm-input');
-  var btn = document.getElementById('reset-confirm-btn');
+  var timerEl = document.getElementById('clear-timer');
+  var input = document.getElementById('clear-confirm-input');
+  var btn = document.getElementById('clear-confirm-btn');
   
   var interval = setInterval(function() {
     timer--;
@@ -787,13 +787,13 @@ function showResetResearchesDialog() {
   }, 1000);
 }
 
-function doResetResearches() {
+function doClearResearches() {
   Dialog.close();
-  showToast('正在重置研究列表...', 'info');
-  fetch('/api/researches/reset', {method:'POST'})
+  showToast('正在清空研究列表...', 'info');
+  fetch('/api/researches/clear', {method:'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function() {
-      showToast('研究列表已重置，正在重新加载...', 'success');
+      showToast('研究列表已清空，正在重新加载...', 'success');
       return loadResearches();
     })
     .then(function() {
@@ -801,9 +801,9 @@ function doResetResearches() {
       buildResearchList('');
       autoLayout();
       rebuildItemOwnershipMap();
-      showToast('研究列表已重置并重新加载', 'success');
+      showToast('研究列表已清空并重新加载', 'success');
     })
-    .catch(function(e) { showToast('重置失败: ' + e.message, 'error'); });
+    .catch(function(e) { showToast('清空失败: ' + e.message, 'error'); });
 }
 
 function toggleColorPicker(popup, input) {

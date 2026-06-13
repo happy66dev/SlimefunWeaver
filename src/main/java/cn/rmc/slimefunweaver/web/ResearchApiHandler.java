@@ -57,8 +57,8 @@ public class ResearchApiHandler implements HttpHandler {
                 handleResearches(exchange, method);
             } else if (path.startsWith("/api/researches/create")) {
                 handleCreateResearch(exchange, method);
-            } else if (path.startsWith("/api/researches/reset")) {
-                handleResetResearches(exchange, method);
+            } else if (path.startsWith("/api/researches/clear")) {
+                handleClearResearches(exchange, method);
             } else if (path.matches("/api/researches/.+")) {
                 handleDeleteResearch(exchange, method, path);
             } else if (path.equals("/api/slimefun-items")) {
@@ -185,16 +185,16 @@ public class ResearchApiHandler implements HttpHandler {
         }
     }
 
-    private void handleResetResearches(HttpExchange exchange, String method) throws IOException {
+    private void handleClearResearches(HttpExchange exchange, String method) throws IOException {
         if (!WebSecurity.isAccessAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
         if (!WebSecurity.isWriteAllowed(plugin, exchange)) { exchange.sendResponseHeaders(403, -1); return; }
         if (!"POST".equalsIgnoreCase(method)) { exchange.sendResponseHeaders(405, -1); return; }
         
         try {
-            CustomResearchManager.resetAndReimport();
+            CustomResearchManager.clearAllResearches();
             serveJson(exchange, "{\"ok\":true}");
         } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "Failed to reset researches", e);
+            plugin.getLogger().log(Level.WARNING, "Failed to clear researches", e);
             exchange.sendResponseHeaders(500, -1);
         }
     }

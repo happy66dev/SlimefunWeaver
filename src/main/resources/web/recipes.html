@@ -236,9 +236,13 @@ function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key
 
 function saveCurrentRecipeState() {
   if (recipeIndex < 0 || recipeIndex >= recipesData.length) return;
+  var info = getTypeInfo(currentTypeKey);
+  var maxSlots = info.slots || 9;
+  while (slots.length < maxSlots) slots.push(null);
+  var trimmed = slots.slice(0, maxSlots);
   recipesData[recipeIndex] = {
     type: currentTypeKey,
-    input: slots.map(function(s){return s?s.id:'AIR';}),
+    input: trimmed.map(function(s){return s?s.id:'AIR';}),
     output: outputItemId,
     outputAmount: amount,
     processingTime: processingTime

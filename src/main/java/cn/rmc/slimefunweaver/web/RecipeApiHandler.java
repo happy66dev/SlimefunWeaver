@@ -411,8 +411,11 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private String defaultRecipeJson(String itemId, String rtKey, ItemStack[] recipe) {
+        int slots = guessSlots(rtKey);
         List<String> inputIds = new ArrayList<>();
-        for (ItemStack stack : recipe) inputIds.add(itemIdFromStack(stack));
+        for (int i = 0; i < Math.min(recipe.length, slots); i++) {
+            inputIds.add(itemIdFromStack(recipe[i]));
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("{\"type\":\"").append(escapeJson(rtKey)).append("\",")
           .append("\"input\":[").append(jsonStringList(inputIds)).append("],")
@@ -902,6 +905,9 @@ public class RecipeApiHandler implements HttpHandler {
             case "compressor": case "grind_stone": case "juicer": case "gold_pan":
             case "freezer": case "food_fabricator": case "food_composter":
             case "reactor": case "refinery": case "pressure_chamber": case "table_saw":
+            case "ore_washer": case "oil_pump": case "geo_miner":
+            case "miner_android": case "fisherman_android":
+            case "nuclear_reactor": case "automated_panning_machine":
                 return 2;
             default: return 1;
         }

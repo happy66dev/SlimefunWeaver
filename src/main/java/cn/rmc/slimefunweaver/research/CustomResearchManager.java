@@ -137,9 +137,10 @@ public class CustomResearchManager {
     }
 
     public static void clearAllResearches() throws Exception {
-        if (configFile.exists()) {
-            configFile.delete();
-        }
+        YamlConfiguration empty = new YamlConfiguration();
+        empty.set("enabled", true);
+        empty.createSection("researches");
+        empty.save(configFile);
         initialized = false;
         nextResearchId.set(100000);
         loadAndRegister();

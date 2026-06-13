@@ -170,13 +170,6 @@ public class ResearchApiHandler implements HttpHandler {
         plugin.getLogger().info("[ResearchAPI] DELETE fullKey=" + fullKey);
         
         try {
-            boolean exists = CustomResearchManager.researchExists(fullKey);
-            plugin.getLogger().info("[ResearchAPI] researchExists(" + fullKey + ")=" + exists);
-            if (!exists) {
-                exchange.sendResponseHeaders(404, -1);
-                return;
-            }
-            
             CustomResearchManager.deleteResearch(fullKey);
             serveJson(exchange, "{\"ok\":true}");
         } catch (Exception e) {

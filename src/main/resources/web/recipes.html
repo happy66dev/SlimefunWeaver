@@ -148,7 +148,39 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
   </div>
   </div>
   <div id="fuel-panel" style="display:none">
-    <div style="text-align:center;color:#484f58;padding:60px">燃料管理加载中...</div>
+    <div style="display:flex;height:100%">
+      <div style="width:240px;border-right:1px solid #21262d;display:flex;flex-direction:column">
+        <div style="padding:8px">
+          <input type="text" id="fuel-search" placeholder="搜索发电机..." oninput="filterFuelGenerators()" style="width:100%;padding:5px 8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:11px">
+        </div>
+        <div id="fuel-generator-list" style="flex:1;overflow-y:auto;padding:4px 8px"></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column">
+        <div id="fuel-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:13px">← 选择一个发电机查看燃料</div>
+        <div id="fuel-editor" style="display:none;flex:1;overflow-y:auto;padding:12px 16px">
+          <div id="fuel-info" style="margin-bottom:12px"></div>
+          <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;font-weight:600;color:#c9d1d9">燃料列表</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-xs btn-primary" onclick="addFuel()">+ 添加燃料</button>
+              <button class="btn btn-xs" onclick="saveFuels()" id="btn-save-fuels">💾 保存</button>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead>
+              <tr style="border-bottom:1px solid #21262d">
+                <th style="text-align:left;padding:6px 8px;color:#8b949e">燃料物品</th>
+                <th style="text-align:left;padding:6px 8px;color:#8b949e">燃烧时间(秒)</th>
+                <th style="text-align:left;padding:6px 8px;color:#8b949e">产出物品</th>
+                <th style="text-align:center;padding:6px 8px;color:#8b949e">操作</th>
+              </tr>
+            </thead>
+            <tbody id="fuel-tbody"></tbody>
+          </table>
+          <div id="fuel-empty-msg" style="text-align:center;color:#484f58;padding:20px;display:none">暂无燃料，点击上方按钮添加</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="debug-panel" id="debug-panel"></div>
@@ -176,8 +208,111 @@ function switchTab(tab) {
   if (tab === 'fuels') loadFuels();
 }
 function loadFuels() {
-  // 燃料管理加载逻辑将在后续任务中实现
-  console.log('Loading fuels...');
+  dlog('FUEL','GET /api/fuel-types');
+  fetch('/api/fuel-types').then(function(r){return r.json()}).then(function(json){
+    fuelGenerators = json.generators || [];
+    dlog('FUEL','loaded '+fuelGenerators.length+' generators');
+    renderFuelGeneratorList();
+  }).catch(function(e){ dlogErr('FUEL',e.message); });
+}
+
+function renderFuelGeneratorList() {
+  var q = ($id('fuel-search').value || '').toLowerCase();
+  var list = $id('fuel-generator-list');
+  var h = '';
+  fuelGenerators.forEach(function(g){
+    if (q && g.name.toLowerCase().indexOf(q) < 0 && g.id.toLowerCase().indexOf(q) < 0) return;
+    var active = selectedGenerator && selectedGenerator.id === g.id;
+    h += '<div style="padding:6px 8px;cursor:pointer;border-radius:4px;margin-bottom:2px;'+(active?'background:#1f2937':'')+'" onclick="selectFuelGenerator(\''+g.id+'\')">';
+    h += '<div style="font-size:11px;color:#c9d1d9">'+MC.parseToHtml(g.name)+'</div>';
+    h += '<div style="font-size:9px;color:#484f58">'+g.id+' | '+g.energyPerTick+' J/t | '+g.fuels.length+' 燃料</div>';
+    h += '</div>';
+  });
+  list.innerHTML = h || '<div style="color:#484f58;text-align:center;padding:16px;font-size:10px">无匹配发电机</div>';
+}
+
+function filterFuelGenerators() { renderFuelGeneratorList(); }
+
+function selectFuelGenerator(generatorId) {
+  var g = fuelGenerators.find(function(x){return x.id===generatorId});
+  if (!g) return;
+  selectedGenerator = g;
+  currentFuels = (g.fuels || []).map(function(f){
+    return {inputId:f.inputId, inputName:f.inputName||f.inputId, burnTime:f.burnTime, outputId:f.outputId||null, outputName:f.outputName||null};
+  });
+  $id('fuel-empty').style.display = 'none';
+  $id('fuel-editor').style.display = '';
+  renderFuelInfo();
+  renderFuelTable();
+  renderFuelGeneratorList();
+  dlog('FUEL','selected '+g.id+' with '+currentFuels.length+' fuels');
+}
+
+function renderFuelInfo() {
+  var g = selectedGenerator;
+  if (!g) return;
+  $id('fuel-info').innerHTML = '<div style="font-size:14px;font-weight:600;color:#e94560">'+MC.parseToHtml(g.name)+'</div>'
+    + '<div style="font-size:10px;color:#8b949e;margin-top:4px">'+g.id+' | 电量产出: '+g.energyPerTick+' J/tick</div>';
+}
+
+function renderFuelTable() {
+  var tbody = $id('fuel-tbody');
+  var h = '';
+  if (currentFuels.length === 0) {
+    $id('fuel-empty-msg').style.display = '';
+    tbody.innerHTML = '';
+    return;
+  }
+  $id('fuel-empty-msg').style.display = 'none';
+  currentFuels.forEach(function(f, i){
+    h += '<tr style="border-bottom:1px solid #21262d">';
+    h += '<td style="padding:6px 8px">'+MC.parseToHtml(f.inputName)+'</td>';
+    h += '<td style="padding:6px 8px"><input type="number" value="'+f.burnTime+'" min="1" style="width:60px;padding:2px 4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:11px" onchange="currentFuels['+i+'].burnTime=parseInt(this.value)||1"></td>';
+    h += '<td style="padding:6px 8px">'+(f.outputName ? MC.parseToHtml(f.outputName) : '<span style="color:#484f58">无</span>')+'</td>';
+    h += '<td style="text-align:center;padding:6px 8px"><button class="btn btn-xs btn-danger" onclick="removeFuel('+i+')">×</button></td>';
+    h += '</tr>';
+  });
+  tbody.innerHTML = h;
+}
+
+function removeFuel(index) {
+  currentFuels.splice(index, 1);
+  renderFuelTable();
+}
+
+function addFuel() {
+  if (!selectedGenerator) return;
+  var inputId = prompt('输入燃料物品 ID (如 minecraft:coal 或 slimefun:uranium):');
+  if (!inputId || !inputId.trim()) return;
+  inputId = inputId.trim();
+  var burnTime = parseInt(prompt('输入燃烧时间（秒）:', '16'));
+  if (!burnTime || burnTime <= 0) burnTime = 16;
+  var outputId = prompt('输入产出物品 ID（可留空）:') || null;
+  if (outputId) outputId = outputId.trim();
+  if (!outputId) outputId = null;
+  currentFuels.push({inputId:inputId, inputName:inputId, burnTime:burnTime, outputId:outputId, outputName:outputId});
+  renderFuelTable();
+  dlog('FUEL','added fuel '+inputId+' burnTime='+burnTime);
+}
+
+function saveFuels() {
+  if (!selectedGenerator) return;
+  var btn = $id('btn-save-fuels');
+  btn.disabled = true; btn.textContent = '保存中...';
+  dlog('FUEL','PUT /api/fuels generatorId='+selectedGenerator.id+' fuels='+currentFuels.length);
+  var body = {
+    generatorId: selectedGenerator.id,
+    fuels: currentFuels.map(function(f){ return {inputId:f.inputId, burnTime:f.burnTime, outputId:f.outputId}; })
+  };
+  fetch('/api/fuels', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal:AbortSignal.timeout(15000)})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(){
+      dlog('FUEL','save ok');
+      showToast('燃料已保存','success');
+      loadFuels();
+    })
+    .catch(function(e){ dlogErr('FUEL','save failed: '+e.message); showToast('保存失败: '+e.message,'error'); })
+    .finally(function(){ btn.disabled=false; btn.textContent='💾 保存'; });
 }
 var API_TOKEN = sessionStorage.getItem('scg_token') || '';
 if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
@@ -251,6 +386,9 @@ var recipeIndex = 0, recipesData = [];
 var pickerTarget = 'slot', pickerSlotIdx = -1;
 var popupCache = [];
 var originalItemName = '';
+var fuelGenerators = [];
+var selectedGenerator = null;
+var currentFuels = [];
 
 function $id(id) { return document.getElementById(id); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

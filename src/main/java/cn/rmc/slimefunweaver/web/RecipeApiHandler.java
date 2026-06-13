@@ -654,8 +654,8 @@ public class RecipeApiHandler implements HttpHandler {
                 Object outputVal = recipeMap.get("output");
                 int outputAmount = clamp(toInt(recipeMap.get("output-amount"), 1), 1, 64);
 
-                ItemStack[] inputStacks = new ItemStack[inputList.size()];
-                for (int i = 0; i < inputList.size(); i++) {
+                ItemStack[] inputStacks = new ItemStack[9];
+                for (int i = 0; i < Math.min(inputList.size(), 9); i++) {
                     String matId = String.valueOf(inputList.get(i));
                     inputStacks[i] = resolveItemStack(matId);
                 }

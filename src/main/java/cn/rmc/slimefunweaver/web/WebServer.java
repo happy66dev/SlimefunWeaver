@@ -41,6 +41,10 @@ public class WebServer {
             server.createContext("/api/recipes", recipeHandler);
             server.createContext("/api/recipes/materials", recipeHandler);
             server.createContext("/api/recipe-types", recipeHandler);
+
+            FuelApiHandler fuelHandler = new FuelApiHandler(handler.getPlugin());
+            server.createContext("/api/fuel-types", fuelHandler);
+            server.createContext("/api/fuels", fuelHandler);
         }
         server.setExecutor(null);
         server.start();

@@ -89,6 +89,9 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .rtab-del{color:#f85149;margin-left:2px;cursor:pointer;font-size:11px;line-height:1}
 .rtab-del:hover{color:#ff7b72}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.tab-btn{padding:8px 16px;background:transparent;border:none;color:#8b949e;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
+.tab-btn.active{color:#e94560;border-bottom-color:#e94560}
+.tab-btn:hover{color:#c9d1d9}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center}
@@ -107,7 +110,12 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
   <button class="btn btn-primary btn-sm" onclick="save()">保存</button>
 </div>
 <div class="main">
-  <div class="panel left">
+  <div id="tab-bar" style="display:flex;gap:0;border-bottom:1px solid #30363d;background:#161b22">
+    <button class="tab-btn active" data-tab="recipes" onclick="switchTab('recipes')">🧪 合成表</button>
+    <button class="tab-btn" data-tab="fuels" onclick="switchTab('fuels')">🔥 燃料</button>
+  </div>
+  <div id="recipe-panel">
+    <div class="panel left">
     <input class="search-box" placeholder="搜索ID/名称..." oninput="filterItems(this.value)" id="item-search">
     <div id="item-list" style="flex:1;overflow-y:auto;"></div>
   </div>
@@ -138,6 +146,10 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
       <button class="btn btn-primary" style="flex:1" onclick="save()">保存</button>
     </div>
   </div>
+  </div>
+  <div id="fuel-panel" style="display:none">
+    <div style="text-align:center;color:#484f58;padding:60px">燃料管理加载中...</div>
+  </div>
 </div>
 <div class="debug-panel" id="debug-panel"></div>
 
@@ -154,6 +166,19 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 <div id="modal-overlay"></div>
 
 <script>
+var currentTab = 'recipes';
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelector('.tab-btn[data-tab="'+tab+'"]').classList.add('active');
+  $id('recipe-panel').style.display = tab === 'recipes' ? '' : 'none';
+  $id('fuel-panel').style.display = tab === 'fuels' ? '' : 'none';
+  if (tab === 'fuels') loadFuels();
+}
+function loadFuels() {
+  // 燃料管理加载逻辑将在后续任务中实现
+  console.log('Loading fuels...');
+}
 var API_TOKEN = sessionStorage.getItem('scg_token') || '';
 if (API_TOKEN) sessionStorage.setItem('scg_token', API_TOKEN);
 var nativeFetch = window.fetch.bind(window);
@@ -476,6 +501,7 @@ function renderTypeList() {
   var h = '';
   recipeTypes.forEach(function(t){
     if (isNullRecipeType(t.key)) return;
+    if (t.isEditable === false) return; // 跳过不可编辑类型
     var builtinTag = t.isBuiltin ? '' : ' <span style="color:#d29922;font-size:9px;">addon</span>';
     h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" onclick="changeType(\''+escKey(t.key)+'\')">'
       + esc(t.name) + builtinTag + ' <span class="tns">' + esc(t.key) + '</span></div>';

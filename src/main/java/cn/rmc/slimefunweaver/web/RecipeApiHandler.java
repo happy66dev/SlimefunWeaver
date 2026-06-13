@@ -52,35 +52,26 @@ public class RecipeApiHandler implements HttpHandler {
     private static final Map<String, RecipeSnapshot> originalRecipes = new LinkedHashMap<>();
     private final String recipesHtml;
 
-    private static final Set<String> BUILTIN_RECIPE_TYPES = new LinkedHashSet<>();
+    private static final Set<String> EDITABLE_RECIPE_TYPES = new LinkedHashSet<>();
     static {
-        BUILTIN_RECIPE_TYPES.add("slimefun:enhanced_crafting_table");
-        BUILTIN_RECIPE_TYPES.add("slimefun:armor_forge");
-        BUILTIN_RECIPE_TYPES.add("slimefun:grind_stone");
-        BUILTIN_RECIPE_TYPES.add("slimefun:smeltery");
-        BUILTIN_RECIPE_TYPES.add("slimefun:ore_crusher");
-        BUILTIN_RECIPE_TYPES.add("slimefun:compressor");
-        BUILTIN_RECIPE_TYPES.add("slimefun:pressure_chamber");
-        BUILTIN_RECIPE_TYPES.add("slimefun:magic_workbench");
-        BUILTIN_RECIPE_TYPES.add("slimefun:gold_pan");
-        BUILTIN_RECIPE_TYPES.add("slimefun:juicer");
-        BUILTIN_RECIPE_TYPES.add("slimefun:ancient_altar");
-        BUILTIN_RECIPE_TYPES.add("slimefun:heated_pressure_chamber");
-        BUILTIN_RECIPE_TYPES.add("slimefun:ore_washer");
-        BUILTIN_RECIPE_TYPES.add("slimefun:table_saw");
-        BUILTIN_RECIPE_TYPES.add("slimefun:freezer");
-        BUILTIN_RECIPE_TYPES.add("slimefun:food_fabricator");
-        BUILTIN_RECIPE_TYPES.add("slimefun:food_composter");
-        BUILTIN_RECIPE_TYPES.add("slimefun:reactor");
-        BUILTIN_RECIPE_TYPES.add("slimefun:refinery");
-        BUILTIN_RECIPE_TYPES.add("slimefun:automated_panning_machine");
-        BUILTIN_RECIPE_TYPES.add("slimefun:miner_android");
-        BUILTIN_RECIPE_TYPES.add("slimefun:fisherman_android");
-        BUILTIN_RECIPE_TYPES.add("slimefun:geo_miner");
-        BUILTIN_RECIPE_TYPES.add("slimefun:oil_pump");
-        BUILTIN_RECIPE_TYPES.add("slimefun:nuclear_reactor");
-        BUILTIN_RECIPE_TYPES.add("slimefun:null");
+        EDITABLE_RECIPE_TYPES.add("slimefun:enhanced_crafting_table");
+        EDITABLE_RECIPE_TYPES.add("slimefun:magic_workbench");
+        EDITABLE_RECIPE_TYPES.add("slimefun:armor_forge");
+        EDITABLE_RECIPE_TYPES.add("slimefun:ancient_altar");
+        EDITABLE_RECIPE_TYPES.add("slimefun:ore_crusher");
+        EDITABLE_RECIPE_TYPES.add("slimefun:grind_stone");
+        EDITABLE_RECIPE_TYPES.add("slimefun:compressor");
+        EDITABLE_RECIPE_TYPES.add("slimefun:smeltery");
+        EDITABLE_RECIPE_TYPES.add("slimefun:juicer");
+        EDITABLE_RECIPE_TYPES.add("slimefun:heated_pressure_chamber");
+        EDITABLE_RECIPE_TYPES.add("slimefun:food_fabricator");
+        EDITABLE_RECIPE_TYPES.add("slimefun:food_composter");
+        EDITABLE_RECIPE_TYPES.add("slimefun:refinery");
+        EDITABLE_RECIPE_TYPES.add("slimefun:freezer");
     }
+
+    private static final Map<String, Integer> ADDON_RECIPE_TYPE_SLOTS = new LinkedHashMap<>();
+    private boolean addonDetected = false;
 
     private static final Set<String> TIMED_RECIPE_TYPES = new HashSet<>();
     static {
@@ -249,22 +240,39 @@ public class RecipeApiHandler implements HttpHandler {
               .append("\"slots\":").append(info.slots).append(",")
               .append("\"cols\":").append(info.cols).append(",")
               .append("\"hasTime\":").append(info.hasTime).append(",")
-              .append("\"isBuiltin\":").append(info.isBuiltin)
+              .append("\"isBuiltin\":").append(info.isBuiltin).append(",")
+              .append("\"isEditable\":").append(info.isEditable)
               .append("}");
         }
         sb.append("]}");
         return sb.toString();
     }
 
+    private void detectAddonRecipeTypes(Map<String, RecipeType> resolved) {
+        if (addonDetected) return;
+        for (Map.Entry<String, RecipeType> entry : resolved.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith("galactifun:") && key.contains("assembly")) {
+                EDITABLE_RECIPE_TYPES.add(key);
+                ADDON_RECIPE_TYPE_SLOTS.put(key, 9);
+            } else if (key.startsWith("infinityexpansion:") && (key.contains("storage") || key.contains("infinity"))) {
+                EDITABLE_RECIPE_TYPES.add(key);
+                ADDON_RECIPE_TYPE_SLOTS.put(key, 9);
+            }
+        }
+        addonDetected = true;
+    }
+
     private Map<String, RecipeTypeInfo> collectAllRecipeTypes(Map<String, RecipeType> resolved) {
+        detectAddonRecipeTypes(resolved);
         Map<String, RecipeTypeInfo> map = new LinkedHashMap<>();
 
-        for (String key : BUILTIN_RECIPE_TYPES) {
+        for (String key : EDITABLE_RECIPE_TYPES) {
             RecipeType rt = resolved.get(key);
             String name = readDisplayName(rt, key);
             int slots = guessSlots(key);
             map.put(key, new RecipeTypeInfo(key, name, slots, guessCols(slots),
-                TIMED_RECIPE_TYPES.contains(key), true));
+                TIMED_RECIPE_TYPES.contains(key), true, true));
         }
 
         for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
@@ -277,7 +285,7 @@ public class RecipeApiHandler implements HttpHandler {
 
             String name = readDisplayName(rt, key);
             int slots = guessSlots(key);
-            map.put(key, new RecipeTypeInfo(key, name, slots, guessCols(slots), false, false));
+            map.put(key, new RecipeTypeInfo(key, name, slots, guessCols(slots), false, false, false));
         }
 
         return map;
@@ -373,7 +381,8 @@ public class RecipeApiHandler implements HttpHandler {
               .append("\"slots\":").append(info.slots).append(",")
               .append("\"cols\":").append(info.cols).append(",")
               .append("\"hasTime\":").append(info.hasTime).append(",")
-              .append("\"isBuiltin\":").append(info.isBuiltin)
+              .append("\"isBuiltin\":").append(info.isBuiltin).append(",")
+              .append("\"isEditable\":").append(info.isEditable)
               .append("}");
         }
         sb.append("]}");
@@ -448,7 +457,7 @@ public class RecipeApiHandler implements HttpHandler {
             try {
                 RecipeType rt = (RecipeType) f.get(null);
                 String k = rt.getKey().toString();
-                if (BUILTIN_RECIPE_TYPES.contains(k)) map.put(k, rt);
+                if (EDITABLE_RECIPE_TYPES.contains(k)) map.put(k, rt);
             } catch (Exception ignored) {}
         }
         return map;
@@ -457,9 +466,9 @@ public class RecipeApiHandler implements HttpHandler {
     private static class RecipeTypeInfo {
         final String key, name;
         final int slots, cols;
-        final boolean hasTime, isBuiltin;
-        RecipeTypeInfo(String k, String n, int s, int c, boolean t, boolean b) {
-            key = k; name = n; slots = s; cols = c; hasTime = t; isBuiltin = b;
+        final boolean hasTime, isBuiltin, isEditable;
+        RecipeTypeInfo(String k, String n, int s, int c, boolean t, boolean b, boolean e) {
+            key = k; name = n; slots = s; cols = c; hasTime = t; isBuiltin = b; isEditable = e;
         }
     }
 
@@ -897,6 +906,9 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private static int guessSlots(String key) {
+        if (ADDON_RECIPE_TYPE_SLOTS.containsKey(key)) {
+            return ADDON_RECIPE_TYPE_SLOTS.get(key);
+        }
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
         switch (shortKey) {
             case "enhanced_crafting_table": case "armor_forge": case "magic_workbench":

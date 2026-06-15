@@ -681,7 +681,11 @@ public class RecipeApiHandler implements HttpHandler {
 
                 if (isFirstRecipe) {
                     item.setRecipeType(rt);
-                    item.setRecipe(inputStacks);
+                    // 喵~防御：setRecipe强制要求length=9，无论guessSlots返回多少都必须pad到9位
+                    // inputStacks可能是5格(MAGIC_WORKBENCH)、4格(ARMOR_FORGE)等非9格，补null填满
+                    ItemStack[] paddedFirst = new ItemStack[9];
+                    System.arraycopy(inputStacks, 0, paddedFirst, 0, Math.min(inputStacks.length, 9));
+                    item.setRecipe(paddedFirst);
                     item.setRecipeOutput(outputStack);
                     isFirstRecipe = false;
 
@@ -792,7 +796,18 @@ public class RecipeApiHandler implements HttpHandler {
         void restore(SlimefunItem item) {
             item.setRecipeType(type);
             if (recipe != null) {
-                item.setRecipe(Arrays.stream(recipe).map(stack -> stack == null ? null : stack.clone()).toArray(ItemStack[]::new));
+                // 喵~防御：setRecipe强制length=9，restore时从快照恢复也必须保证是9位
+                // 虽然快照来源于item.getRecipe()理论上已是9位，但防御性pad防止脏数据导致崩溃
+                ItemStack[] cloned = Arrays.stream(recipe)
+                        .map(stack -> stack == null ? null : stack.clone())
+                        .toArray(ItemStack[]::new);
+                // 不足9位则pad到9位（补null），超出则截断
+                if (cloned.length != 9) {
+                    ItemStack[] padded = new ItemStack[9];
+                    System.arraycopy(cloned, 0, padded, 0, Math.min(cloned.length, 9));
+                    cloned = padded;
+                }
+                item.setRecipe(cloned);
             }
             if (output != null) {
                 item.setRecipeOutput(output.clone());

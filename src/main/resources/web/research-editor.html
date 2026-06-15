@@ -493,23 +493,51 @@ function renderDeps(){
   function hideItemPicker(){document.getElementById('item-picker-popup').classList.remove('show')}
   var itemPickerTimer=null;
   function searchItems(){
+    // 获取搜索框的值，去除首尾空格
     var q=document.getElementById('item-picker-search').value.trim();
+    // 清除上一次的防抖定时器，避免用户快速输入时重复请求
     clearTimeout(itemPickerTimer);
+    // 防抖：延迟250ms后才真正发起请求，减少无效请求喵~
     itemPickerTimer=setTimeout(function(){
+      // 向后端请求物品列表，如果有搜索词就加上q参数
       fetch('/api/slimefun-items'+(q?'?q='+encodeURIComponent(q):'')).then(function(r){return r.json()}).then(function(json){
         var results=document.getElementById('item-picker-results');
+        // 最多显示30条结果，防止渲染过多DOM节点
         var items=(json.items||[]).slice(0,30);
         if(items.length===0){results.innerHTML='<div style="color:#484f58;padding:8px">无匹配物品</div>';return}
-        var h='';
+        // 分两组：未被其他研究锁定的（可添加）和已被其他研究锁定的（只读）
+        var unlockedHtml='', lockedHtml='', hasLocked=false;
         items.forEach(function(it){
+          // 判断该物品是否已在当前研究中
           var alreadyIn=selectedResearch&&selectedResearch.items.some(function(si){return si.id===it.id});
-          h+='<div data-item-id="'+MC.escapeHtml(it.id)+'" style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+';position:relative" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
-      +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
-            +' <span style="color:#c9d1d9">'+MC.parseToHtml(it.name||'')+'</span>'
-            +(alreadyIn?' <span style="color:#3fb950;font-size:9px">✓已添加</span>':'')
-      +'</div>';
+          // 查询该物品是否已归属于其他研究（itemIdToResearch 存储了物品ID到研究对象的映射）
+          var ownerResearch=itemIdToResearch[it.id];
+          // 判断是否被其他研究锁定（归属研究存在，且不是当前选中的研究）
+          var lockedByOther=ownerResearch&&(!selectedResearch||ownerResearch.key!==selectedResearch.key);
+          if(lockedByOther){
+            // 已归属其他研究：显示为半透明不可点击，并标注归属研究名称
+            hasLocked=true;
+            lockedHtml+='<div data-item-id="'+MC.escapeHtml(it.id)+'" style="padding:4px 6px;border-radius:4px;cursor:not-allowed;margin-bottom:2px;background:#21262d;opacity:0.4;position:relative">'
+              +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
+              +' <span style="color:#c9d1d9">'+MC.parseToHtml(it.name||'')+'</span>'
+              +' <span style="color:#8b949e;font-size:9px">'+MC.strip(ownerResearch.name)+'</span>'
+              +'</div>';
+          } else {
+            // 未被锁定：正常显示，已添加到当前研究的显示绿色勾号
+            unlockedHtml+='<div data-item-id="'+MC.escapeHtml(it.id)+'" style="padding:4px 6px;border-radius:4px;cursor:'+(alreadyIn?'not-allowed':'pointer')+';margin-bottom:2px;background:'+(alreadyIn?'rgba(72,79,88,0.2)':'#21262d')+';opacity:'+(alreadyIn?'0.5':'1')+';position:relative" onclick="'+(alreadyIn?'':'addItemToResearch(\''+escJS(it.id)+'\',\''+escJS(it.name||'')+'\')')+'">'
+              +'<span style="color:#58a6ff">'+MC.escapeHtml(it.id)+'</span>'
+              +' <span style="color:#c9d1d9">'+MC.parseToHtml(it.name||'')+'</span>'
+              +(alreadyIn?' <span style="color:#3fb950;font-size:9px">✓已添加</span>':'')
+              +'</div>';
+          }
         });
-        results.innerHTML=h;
+        // 拼接最终HTML：未锁定物品在前，已锁定物品在后（中间加分割线）
+        var finalHtml=unlockedHtml;
+        if(hasLocked){
+          finalHtml+='<div style="margin:6px 0 3px;padding:3px 4px;background:#21262d;border-radius:3px;font-size:9px;color:#8b949e">↓ 已归属（锁定）</div>';
+          finalHtml+=lockedHtml;
+        }
+        results.innerHTML=finalHtml;
       }).catch(function(){document.getElementById('item-picker-results').innerHTML='<div style="color:#f85149;padding:8px">加载失败</div>'})
     },250);
   }
@@ -846,39 +874,9 @@ function toggleColorPicker(popup, input) {
   }
 }
 
-window.searchItems = function() {
-  var resultsDiv = document.getElementById('item-picker-results');
-  if (!resultsDiv) return;
-  var rows = resultsDiv.querySelectorAll('[data-item-id]');
-  var locked = [], unlocked = [];
-  rows.forEach(function(row) {
-    var itemId = row.getAttribute('data-item-id');
-    var ownerKey = itemIdToResearch[itemId];
-    if (ownerKey && (!selectedResearch || ownerKey.key !== selectedResearch.key)) {
-      row.style.opacity = '0.4'; row.style.cursor = 'not-allowed';
-      row.onclick = null;
-      var tag = document.createElement('span');
-      tag.className = 'item-research-tag';
-      tag.textContent = MC.strip(ownerKey.name);
-      row.appendChild(tag);
-      locked.push(row);
-    } else {
-      unlocked.push(row);
-    }
-  });
-  resultsDiv.innerHTML = '';
-  unlocked.forEach(function(r){ resultsDiv.appendChild(r); });
-  if (locked.length > 0) {
-    var sep = document.createElement('div');
-    sep.style = 'margin:6px 0 3px;padding:3px 4px;background:#21262d;border-radius:3px;font-size:9px;color:#8b949e';
-    sep.textContent = '↓ 已归属（锁定）';
-    resultsDiv.appendChild(sep);
-    locked.forEach(function(r){ resultsDiv.appendChild(r); });
-  }
-};
-
-// Override addItemToResearch to call new function
+// addItemToResearch 作为 addItemToCurrentResearch 的别名，供搜索结果列表的 onclick 调用
 function addItemToResearch(id, name) {
+  // 转发调用真正的添加逻辑
   addItemToCurrentResearch(id, name);
 }
 

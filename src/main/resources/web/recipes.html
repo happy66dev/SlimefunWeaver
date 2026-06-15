@@ -726,8 +726,9 @@ function doSelectItem(id) {
   } else {
     var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
     var defInput = defType ? (d.currentRecipe||[]) : [];
-    // 没有storedRecipes时，显示的是addon原生配方，标记isBuiltin=true（只读）喵~
-    recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: !!defType}];
+    // 没有storedRecipes时，无论defType是否为空，都是addon原生配方，标记isBuiltin=true（只读）喵~
+    // 修复：原来用!!defType会导致type为空的物品被错误标记为可编辑，现在统一为true喵~
+    recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: true}];
   }
 
   recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
@@ -1050,8 +1051,9 @@ function revertItem() {
     } else {
       var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
       var defInput = defType ? (d.currentRecipe||[]) : [];
-      // 没有storedRecipes：addon原生配方，isBuiltin=true（只读）喵~
-      recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: !!defType}];
+      // 没有storedRecipes：addon原生配方，统一标记isBuiltin=true（只读）喵~
+      // 修复：原来用!!defType会导致type为空的物品被错误标记为可编辑喵~
+      recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: true}];
     }
     // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
     var firstScgIdxRv = 0;

@@ -281,6 +281,8 @@ function selectFuelGenerator(generatorId) {
   var g = fuelGenerators.find(function(x){return x.id===generatorId});
   if (!g) return;
   selectedGenerator = g;
+  // 选择新发电机时重置脏标志，初始化状态视为未修改喵~
+  fuelDirty = false;
   currentFuels = (g.fuels || []).map(function(f){
     return {inputId:f.inputId, inputName:f.inputName||f.inputId, burnTime:f.burnTime, outputId:f.outputId||null, outputName:f.outputName||null};
   });
@@ -320,7 +322,9 @@ function renderFuelTable() {
 }
 
 function removeFuel(index) {
+  // 删除燃料后标记为有未保存修改喵~
   currentFuels.splice(index, 1);
+  fuelDirty = true;
   renderFuelTable();
 }
 
@@ -402,6 +406,8 @@ function confirmAddFuel() {
   var resolvedInputName = fuelAddInputName || fuelAddInputId;  // 兜底：若name为空则回退到ID
   var resolvedOutputName = fuelAddOutputId ? (fuelAddOutputName || fuelAddOutputId) : null;  // 无产出时为null
   currentFuels.push({inputId:fuelAddInputId, inputName:resolvedInputName, burnTime:burnTime, outputId:fuelAddOutputId, outputName:resolvedOutputName});
+  // 添加燃料后标记为有未保存修改喵~
+  fuelDirty = true;
   renderFuelTable();
   closeFuelAddModal();
   dlog('FUEL','added fuel '+fuelAddInputId+' burnTime='+burnTime);
@@ -420,6 +426,8 @@ function saveFuels() {
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(function(){
       dlog('FUEL','save ok');
+      // 保存成功后重置脏标志，表示没有未保存修改喵~
+      fuelDirty = false;
       showToast('燃料已保存','success');
       loadFuels();
     })
@@ -768,7 +776,26 @@ function renderTypeList() {
 function changeType(key) {
   if (saving) return;
   dlog('CHANGE', 'changeType: ' + currentTypeKey + ' -> ' + key);
-  saveCurrentRecipeState(); // 切换前先保存当前格子状态喵
+  // 喵~修复BUG-10：切换合成类型前，检查新类型的maxSlots是否小于当前有内容的slot数量
+  // 若会导致数据丢失，则弹confirm确认框，用户取消则不切换
+  var newInfo = getTypeInfo(key);
+  var newMaxSlots = newInfo.slots;
+  // 统计当前slots中有内容（非null且非AIR）的数量
+  var filledCount = 0;
+  for (var ci = newMaxSlots; ci < slots.length; ci++) {
+    if (slots[ci] && slots[ci].id && slots[ci].id !== 'AIR') {
+      filledCount++;
+    }
+  }
+  // 如果新类型的格子数少于当前有内容的格子范围，说明会丢失数据
+  if (filledCount > 0) {
+    // 喵~防御：会丢失filledCount个有内容的格子，需要用户确认
+    if (!confirm('切换合成方式后，将有 ' + filledCount + ' 个已填写的格子超出范围并被清除，确定继续吗？')) {
+      // 用户取消，恢复select的显示值，不切换type，直接返回喵~
+      return;
+    }
+  }
+  saveCurrentRecipeState(); // 切换前先保存当前格子状态喵~
   currentTypeKey = key;
   var info = getTypeInfo(key);
   while (slots.length < info.slots) slots.push(null);

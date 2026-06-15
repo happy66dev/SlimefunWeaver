@@ -643,8 +643,9 @@ function setDirty(v) {
 
 function selectItem(id) {
   if (saving) { showToast('正在保存，请稍后再切换物品','info'); return; }
-  if (dirty && selectedItemId !== id) { Dialog.confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？', function(){ doSelectItem(id); }); return; }
-  // 喵~防御：点击已选中物品时，无论是否有未保存修改都直接返回，不重新加载（dirty=true已在上一行处理，dirty=false也无需重载）
+  if (dirty && selectedItemId !== id) { Dialog.confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？', function(){ setDirty(false); $id('center-empty').style.display = 'none'; $id('center-panel').style.display = ''; $id('center-panel').innerHTML = '<div style="text-align:center;color:#484f58;padding-top:60px;">加载中...</div>'; doSelectItem(id); }); return; }
+  // 喵~防御：点击已选中物品时（且dirty=false走到这里），直接返回，不重新加载
+  // dirty=true的情况已在上一行由Dialog.confirm拦截处理，不会走到这里
   if (selectedItemId === id) { return; }
   if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
   pendingSelectTimer = setTimeout(function(){ if (saving) return; $id('center-empty').style.display = 'none'; $id('center-panel').style.display = ''; $id('center-panel').innerHTML = '<div style="text-align:center;color:#484f58;padding-top:60px;">加载中...</div>'; setDirty(false); doSelectItem(id); }, 40);

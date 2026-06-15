@@ -190,6 +190,7 @@ public class CustomResearchManager {
     }
     
     private static int unregisterOldCustomResearches() {
+        // 喵~只移除带 swr_ 前缀的自定义研究（旧版占位符清理）
         int removed = 0;
         java.util.Iterator<Research> it = Slimefun.getRegistry().getResearches().iterator();
         while (it.hasNext()) {
@@ -197,6 +198,7 @@ public class CustomResearchManager {
             try {
                 String rKey = r.getKey().getKey();
                 if (rKey.startsWith(RESEARCH_PREFIX)) {
+                    // 喵~解绑该研究关联的所有物品，避免物品状态残留
                     for (SlimefunItem item : new ArrayList<>(r.getAffectedItems())) {
                         if (item != null && item.getResearch() == r) {
                             item.setResearch(null);
@@ -211,24 +213,94 @@ public class CustomResearchManager {
         }
         return removed;
     }
+
+    /**
+     * 当自定义研究系统启用时，将所有不在 CustomResearches.yml 中的研究从 SF4 注册表移除。
+     * 这样可以阻止 addon 通过 Research.register() 绕过自定义研究配置的研究出现在游戏中。
+     *
+     * 输入：allowedKeys — CustomResearches.yml 的 researches 节点中配置的所有 fullKey（namespace:key 格式）
+     * 输出：被移除的研究数量
+     * 边界条件：allowedKeys 为空 → 移除所有非 swr_ 研究（白名单为空即全部拦截）
+     *
+     * @param allowedKeys 允许保留的研究 key 集合（来自 CustomResearches.yml）
+     * @return 被移除的研究数量
+     */
+    private static int unregisterNonCustomResearches(Set<String> allowedKeys) {
+        int removed = 0;
+        java.util.Iterator<Research> it = Slimefun.getRegistry().getResearches().iterator();
+        while (it.hasNext()) {
+            Research r = it.next();
+            try {
+                // 喵~取得该研究的完整 namespace:key 字符串，用于白名单比对
+                String fullKey = r.getKey().toString();
+                String rKey = r.getKey().getKey();
+
+                // 喵~防御：swr_ 前缀是自定义研究自己注册的，已由 unregisterOldCustomResearches 处理
+                // 这里只处理来自 addon 的非 swr_ 研究
+                if (rKey.startsWith(RESEARCH_PREFIX)) {
+                    continue;
+                }
+
+                // 喵~白名单检查：若该研究不在 CustomResearches.yml 的允许列表中，则将其移除
+                if (!allowedKeys.contains(fullKey)) {
+                    for (SlimefunItem item : new ArrayList<>(r.getAffectedItems())) {
+                        // 喵~解绑物品与研究的关联，让物品变为无需研究即可使用
+                        if (item != null && item.getResearch() == r) {
+                            item.setResearch(null);
+                        }
+                    }
+                    it.remove();
+                    removed++;
+                    plugin.getLogger().info("[CRM] INTERCEPT addon research not in CustomResearches.yml: " + fullKey);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "[CRM] Failed to unregister non-custom research", e);
+            }
+        }
+        return removed;
+    }
     
     private static void loadAndRegister() {
         plugin.getLogger().info("[CRM] LOAD configFile=" + configFile.getAbsolutePath() + " exists=" + configFile.exists());
         YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-        
+
+        // 喵~检查自定义研究系统总开关，关闭时跳过所有处理
         if (!config.getBoolean("enabled", false)) {
             plugin.getLogger().info("[CRM] LOAD custom research system disabled");
             return;
         }
 
+        // 喵~第一步：清理上一次由本管理器注册的 swr_ 前缀研究（避免重复注册）
         int removed = unregisterOldCustomResearches();
         plugin.getLogger().info("[CRM] LOAD removed " + removed + " old custom researches from registry");
-        
+
         ConfigurationSection researchesSection = config.getConfigurationSection("researches");
         if (researchesSection == null) {
             plugin.getLogger().warning("[CRM] LOAD no researches section");
+            // 喵~防御：researches 节点为空时，白名单为空集合，移除所有 addon 研究
+            int intercepted = unregisterNonCustomResearches(new HashSet<>());
+            plugin.getLogger().info("[CRM] LOAD intercepted " + intercepted + " addon researches (empty researches section)");
             return;
         }
+
+        // 喵~第二步：收集 CustomResearches.yml 中配置的允许研究白名单（fullKey = namespace:key）
+        // 仅收集 enabled=true 的研究 key，disabled 的研究不进入白名单（同样被拦截）
+        Set<String> allowedResearchKeys = new HashSet<>();
+        for (String fullKey : researchesSection.getKeys(false)) {
+            ConfigurationSection sec = researchesSection.getConfigurationSection(fullKey);
+            // 喵~防御：sec 为 null 说明该节点是标量而非子节点，跳过
+            if (sec == null) continue;
+            // 喵~只有显式 enabled=true（或未设置，默认 true）的研究才进入白名单
+            if (sec.getBoolean("enabled", true)) {
+                allowedResearchKeys.add(fullKey);
+            }
+        }
+        plugin.getLogger().info("[CRM] LOAD allowedResearchKeys count=" + allowedResearchKeys.size());
+
+        // 喵~第三步：拦截所有不在白名单的 addon 研究（核心修复点）
+        // 当自定义研究启用且 CustomResearches.yml 中不含该研究时，addon 调用 register() 的结果将被清除
+        int intercepted = unregisterNonCustomResearches(allowedResearchKeys);
+        plugin.getLogger().info("[CRM] LOAD intercepted " + intercepted + " addon researches not in CustomResearches.yml");
         
         Map<String, ConfigurationSection> researchConfigs = new LinkedHashMap<>();
         for (String fullKey : researchesSection.getKeys(false)) {

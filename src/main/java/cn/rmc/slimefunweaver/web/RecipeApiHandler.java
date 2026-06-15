@@ -696,7 +696,10 @@ public class RecipeApiHandler implements HttpHandler {
                         }
                     }
                 } else {
-                    item.addRecipe(rt, inputStacks, outputStack);
+                    // addRecipe 强制要求长度9，非首条配方需要pad到9喵
+                    ItemStack[] padded = new ItemStack[9];
+                    System.arraycopy(inputStacks, 0, padded, 0, Math.min(inputStacks.length, 9));
+                    item.addRecipe(rt, padded, outputStack);
                 }
 
                 rt.register(inputStacks, outputStack);

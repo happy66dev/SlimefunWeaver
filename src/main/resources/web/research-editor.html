@@ -176,6 +176,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <span class="stat-ok">依赖 <strong id="stat-deps">-</strong></span>
   </div>
   <div class="toolbar-actions">
+    <span id="save-status-badge" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;background:#21262d;border:1px solid #30363d;color:#8b949e">✓ 已保存</span>
     <button class="btn btn-sm" onclick="discardChanges()">↶ 放弃修改</button>
     <button class="btn btn-sm btn-primary" id="btn-save-researches" onclick="saveResearches()">💾 保存</button>
   </div>
@@ -314,8 +315,8 @@ var Dialog={
 var researches = [];
 var itemToResearch = {};
 var dirty = false, savingResearches = false, dirtyVersion = 0;
-function markDirty(){dirtyVersion++;if(!dirty){dirty=true;if(!savingResearches){var btn=document.getElementById('btn-save-researches');if(btn)btn.textContent='💾 保存 *'}}}
-function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}}
+function markDirty(){dirtyVersion++;if(!dirty){dirty=true;if(!savingResearches){var btn=document.getElementById('btn-save-researches');if(btn)btn.textContent='💾 保存 *'}}var b=document.getElementById('save-status-badge');if(b){b.textContent='● 未保存';b.style.background='rgba(210,153,34,0.15)';b.style.borderColor='#d29922';b.style.color='#d29922'}}
+function clearDirty(){dirty=false;var btn=document.getElementById('btn-save-researches');if(btn){btn.textContent='💾 保存';btn.disabled=false}var b=document.getElementById('save-status-badge');if(b){b.textContent='✓ 已保存';b.style.background='#21262d';b.style.borderColor='#30363d';b.style.color='#8b949e'}}
 // 内部工具，数据源为Slimefun注册表，无XSS威胁
 function escapeKey(k) { return k.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 // 内部工具，数据源为Slimefun注册表，无XSS威胁
@@ -880,4 +881,5 @@ function addItemToResearch(id, name) {
   addItemToCurrentResearch(id, name);
 }
 
-</script></body></html>
+</script>
+</body></html>

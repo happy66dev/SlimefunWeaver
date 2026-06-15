@@ -500,6 +500,11 @@ function renderEditor() {
   updateDisplayPreview();
   updateLorePreview();
 
+  // 显示归属分类
+  var parentNode = findParent(node);
+  var parentLabel = parentNode ? MC.strip(parentNode.display || parentNode.key || '?') : '[根级别]';
+  $('edit-parent-display').textContent = parentLabel;
+
   var iconDisplay = '';
   if (effectiveNode.icon) { iconDisplay = '[' + effectiveNode.icon.type + '] ' + effectiveNode.icon.id; }
   else if (effectiveNode.id) { iconDisplay = '[ITEM] ' + effectiveNode.id; }
@@ -896,6 +901,7 @@ async function searchMaterials() {
 
 async function doSearch() {
   if (state.pickerTarget === 'addReference') { searchReferenceCategories(); return; }
+  if (state.pickerTarget === 'changeParent') { searchParentCategories(); return; }
   var q = $('picker-search').value.trim();
   if (!q) { $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词开始搜索</div>'; return; }
   $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">搜索中...</div>';
@@ -1027,5 +1033,165 @@ document.getElementById('picker-filters').addEventListener('click', function(e) 
   var filter = btn.getAttribute('data-filter');
   if (filter) setPickerFilter(filter);
 });
+
+// ---- 归属分类 picker ----
+
+function openParentPicker() {
+  if (state.saving) return;
+  if (!state.selectedNode) return;
+  state.pickerTarget = 'changeParent';
+  $('picker-title').textContent = '选择归属分类';
+  $('picker-filters').style.display = 'none';
+  $('picker-overlay').style.display = 'flex';
+  var input = $('picker-search');
+  input.value = '';
+  input.placeholder = '搜索分类名或 key...';
+  $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">输入关键词搜索，或直接选择</div>';
+  searchParentCategories();
+  setTimeout(function() { input.focus(); }, 100);
+}
+
+// 收集所有可作为parent的分类（排除当前节点自身及其子孙，避免成环）
+function collectParentCandidates(cats, breadcrumb, q, excludeNode) {
+  if (!cats) return;
+  cats.forEach(function(cat) {
+    if (cat === excludeNode) return; // 排除自身
+    var key = (cat.key || '').toLowerCase();
+    var display = MC.strip(cat.display || cat.key || '').toLowerCase();
+    if (!q || key.indexOf(q) >= 0 || display.indexOf(q) >= 0) {
+      refCategoryResults.push({ cat: cat, breadcrumb: breadcrumb.slice() });
+    }
+    if (cat.children && cat.children.length > 0) {
+      var sub = breadcrumb.slice();
+      sub.push(cat);
+      collectParentCandidates(cat.children, sub, q, excludeNode);
+    }
+  });
+}
+
+function searchParentCategories() {
+  if (refSearchTimer) clearTimeout(refSearchTimer);
+  refSearchTimer = setTimeout(function() {
+    var q = ($('picker-search').value || '').toLowerCase().trim();
+    refCategoryResults = [];
+    // 根级别永远作为第一个选项
+    var rootDisplay = '[根级别]';
+    var rootMatches = !q || rootDisplay.toLowerCase().indexOf(q) >= 0;
+    if (rootMatches) {
+      refCategoryResults.push({ cat: null, breadcrumb: [] }); // null = 根
+    }
+    collectParentCandidates(state.categories, [], q, state.selectedNode);
+    renderParentResults();
+  }, 200);
+}
+
+function renderParentResults() {
+  if (refCategoryResults.length === 0) {
+    $('picker-results').innerHTML = '<div style="padding:16px;color:#666;text-align:center;">无匹配分类</div>';
+    return;
+  }
+  var html = '';
+  refCategoryResults.forEach(function(r, i) {
+    if (r.cat === null) {
+      html += '<div class="picker-item" onclick="pickParentCategory(' + i + ')">' +
+        '<span class="item-type category">根</span>' +
+        '<span>[根级别]</span>' +
+        '</div>';
+      return;
+    }
+    var cat = r.cat;
+    var pathHtml = '';
+    r.breadcrumb.forEach(function(bc) {
+      pathHtml += '<span class="ref-path-seg">' + MC.escapeHtml(MC.strip(bc.display || bc.key)) + '</span><span class="ref-path-arrow">▸</span>';
+    });
+    html += '<div class="picker-item" onclick="pickParentCategory(' + i + ')">' +
+      '<span class="item-type category">分类</span>' +
+      '<span>' + MC.parseToHtml(cat.display || cat.key) + '</span>' +
+      '<span class="item-id">' + MC.escapeHtml(cat.key || '') + '</span>' +
+      '<div class="ref-path">' + pathHtml + '</div>' +
+      '</div>';
+  });
+  $('picker-results').innerHTML = html;
+}
+
+function pickParentCategory(index) {
+  if (state.saving) { closePicker(); return; }
+  var r = refCategoryResults[index];
+  var node = state.selectedNode;
+  if (!node) { closePicker(); return; }
+
+  var newParent = r.cat; // null = 根级别
+
+  // 找当前parent
+  var oldParent = findParent(node);
+
+  // 从旧parent移除
+  var isCategory = !!(node.key); // 有key = 分类，否则 = item
+  if (oldParent === null) {
+    // 旧parent是根
+    if (isCategory) {
+      state.categories = state.categories.filter(function(c) { return c !== node; });
+    }
+    // items不能直接在根，正常情况不会
+  } else {
+    if (isCategory) {
+      if (oldParent && oldParent.children) {
+        oldParent.children = oldParent.children.filter(function(c) { return c !== node; });
+      }
+    } else {
+      if (oldParent && oldParent.items) {
+        oldParent.items = oldParent.items.filter(function(it) { return it !== node; });
+      }
+    }
+  }
+
+  // 计算新位置：用新parent下的空slot
+  var oldSelectedCat = state.selectedCategory;
+  state.selectedCategory = newParent; // 临时切换，让findEmptySlot在新parent下查
+  var newSlot = findEmptySlot();
+  state.selectedCategory = oldSelectedCat; // 还原
+  if (newSlot < 0) {
+    // 新parent满了，放回原parent
+    if (oldParent === null) {
+      if (isCategory) state.categories.push(node);
+    } else {
+      if (isCategory) { if (!oldParent.children) oldParent.children = []; oldParent.children.push(node); }
+      else { if (!oldParent.items) oldParent.items = []; oldParent.items.push(node); }
+    }
+    Toast.show('目标分类已满 (36/36)，移动失败', 'error');
+    closePicker();
+    return;
+  }
+
+  // 更新slot/page
+  node.page = 1;
+  node.slot = newSlot;
+
+  // 加入新parent
+  if (newParent === null) {
+    if (isCategory) state.categories.push(node);
+    else { Toast.show('物品/占位/引用不能放到根级别', 'warning'); closePicker(); return; }
+  } else {
+    if (isCategory) {
+      if (!newParent.children) newParent.children = [];
+      newParent.children.push(node);
+    } else {
+      if (!newParent.items) newParent.items = [];
+      newParent.items.push(node);
+    }
+  }
+
+  // 切换视图到新parent
+  state.selectedCategory = newParent;
+  state.currentPage = 1;
+
+  closePicker();
+  markDirty();
+  renderTree();
+  renderGrid();
+  renderEditor();
+  var targetName = newParent ? MC.strip(newParent.display || newParent.key) : '[根级别]';
+  Toast.show('已移动到: ' + targetName, 'success');
+}
 
 loadCategories();

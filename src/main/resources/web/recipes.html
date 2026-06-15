@@ -88,8 +88,13 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .rtab{padding:3px 8px;cursor:pointer;border:1px solid #30363d;border-radius:3px;font-size:10px;color:#b1bac4;background:#21262d;transition:0.15s;white-space:nowrap}
 .rtab:hover{background:#30363d;color:#e6edf3}
 .rtab.active{background:#e9456022;border-color:#e94560;color:#e94560}
+/* addon配方tab：灰显+锁定样式，不可编辑喵~ */
+.rtab.addon{opacity:0.5;cursor:default;border-style:dashed;border-color:#484f58;color:#484f58}
+.rtab.addon:hover{background:#21262d;color:#484f58}
 .rtab-del{color:#f85149;margin-left:2px;cursor:pointer;font-size:11px;line-height:1}
 .rtab-del:hover{color:#ff7b72}
+/* addon配方只读遮罩：覆盖在编辑区上方，阻止交互喵~ */
+.addon-readonly-mask{position:absolute;inset:0;z-index:10;cursor:not-allowed;background:transparent}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .tab-btn{padding:8px 16px;background:transparent;border:none;color:#8b949e;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
 .tab-btn.active{color:#e94560;border-bottom-color:#e94560}
@@ -518,19 +523,29 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
 function isNullRecipeType(key) { return !key || key === 'null' || /:null$/i.test(key); }
 function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key.split(':').pop(); }
+// 判断当前选中的配方是否为addon提供的只读配方（isBuiltin=true），用于拦截所有编辑操作喵~
+function isCurrentRecipeReadonly() {
+  if (recipeIndex < 0 || recipeIndex >= recipesData.length) return false;
+  return !!(recipesData[recipeIndex] && recipesData[recipeIndex].isBuiltin);
+}
 
 function saveCurrentRecipeState() {
   if (recipeIndex < 0 || recipeIndex >= recipesData.length) return;
+  // addon配方（isBuiltin=true）不允许编辑，直接跳过保存，避免覆盖原始数据喵~
+  if (recipesData[recipeIndex] && recipesData[recipeIndex].isBuiltin) return;
   var info = getTypeInfo(currentTypeKey);
   var maxSlots = info.slots || 9;
   while (slots.length < maxSlots) slots.push(null);
   var trimmed = slots.slice(0, maxSlots);
+  // 保留isBuiltin字段：false表示SCG自管的配方喵~
+  var prevIsBuiltin = recipesData[recipeIndex] ? !!recipesData[recipeIndex].isBuiltin : false;
   recipesData[recipeIndex] = {
     type: currentTypeKey,
     input: trimmed.map(function(s){return s?s.id:'AIR';}),
     output: outputItemId,
     outputAmount: amount,
-    processingTime: processingTime
+    processingTime: processingTime,
+    isBuiltin: prevIsBuiltin  // 保留原有的isBuiltin标记，新增时已设为false喵~
   };
 }
 
@@ -548,16 +563,27 @@ function loadRecipeState(idx) {
 
 function selectRecipe(idx) {
   if (idx === recipeIndex) return;
-  function doSwitch() { saveCurrentRecipeState(); loadRecipeState(idx); renderTypeList(); renderGrid(); updateYaml(); renderRecipeTabs(); }
+  // 喵~防御：切换配方前确保当前配方（非addon）的状态已保存
+  function doSwitch() {
+    // 保存当前非addon配方的状态
+    saveCurrentRecipeState();
+    loadRecipeState(idx);
+    renderTypeList();
+    renderGrid();
+    updateYaml();
+    renderRecipeTabs();
+  }
   if (dirty) { Dialog.confirm('当前配方有未保存修改，切换将丢弃修改，确定继续？', function(){ setDirty(false); doSwitch(); }); return; }
   doSwitch();
 }
 
 function addRecipe() {
+  // 保存当前非addon配方状态（addon配方saveCurrentRecipeState会跳过）
   saveCurrentRecipeState();
   var types = recipeTypes.filter(function(t){return !isNullRecipeType(t.key);});
   var defaultType = types.length > 0 ? types[0].key : '';
-  recipesData.push({type: defaultType, input: [], output: selectedItemId, outputAmount: 1, processingTime: 0});
+  // 新增的配方始终标记为isBuiltin=false，表示SCG自管的配方喵~
+  recipesData.push({type: defaultType, input: [], output: selectedItemId, outputAmount: 1, processingTime: 0, isBuiltin: false});
   loadRecipeState(recipesData.length - 1);
   setDirty(true);
   renderTypeList();
@@ -567,8 +593,16 @@ function addRecipe() {
 }
 
 function deleteRecipe(idx) {
-  if (recipesData.length <= 1) { showToast('至少保留一个配方','info'); return; }
   if (idx < 0 || idx >= recipesData.length) return;
+  // 喵~防御：addon配方（isBuiltin=true）不允许删除，弹提示后返回
+  if (recipesData[idx] && recipesData[idx].isBuiltin) {
+    showToast('addon配方不可删除','error');
+    return;
+  }
+  // 喵~防御：过滤掉isBuiltin=true的配方，统计实际可删除的SCG配方数量
+  // 若SCG配方只剩1条，不允许删除（至少保留一条SCG配方供编辑）
+  var scgCount = recipesData.filter(function(r){return !r.isBuiltin;}).length;
+  if (scgCount <= 1) { showToast('至少保留一个SCG配方','info'); return; }
   saveCurrentRecipeState();
   recipesData.splice(idx, 1);
   if (recipeIndex >= recipesData.length) recipeIndex = recipesData.length - 1;
@@ -582,12 +616,23 @@ function deleteRecipe(idx) {
 
 function renderRecipeTabs() {
   var html = '';
+  // 统计SCG配方数量，用于判断是否显示删除按钮喵~
+  var scgCount = recipesData.filter(function(r){return !r.isBuiltin;}).length;
   for (var i = 0; i < recipesData.length; i++) {
     var r = recipesData[i];
     var typeLabel = shortRecipeType(r.type);
-    html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" onclick="selectRecipe(' + i + ')">配方' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span>';
-    if (recipesData.length > 1) html += '<span class="rtab-del" onclick="event.stopPropagation();deleteRecipe(' + i + ')">✕</span>';
-    html += '</div>';
+    if (r.isBuiltin) {
+      // addon配方：灰显+锁图标，点击时弹提示，不进入编辑喵~
+      html += '<div class="rtab addon" title="由addon提供，不支持修改" onclick="showToast(\'由addon提供，不支持修改\',\'info\')">'
+        + '🔒 addon ' + (i+1) + ' <span style="font-size:9px;color:#484f58">' + typeLabel + '</span>'
+        + '</div>';
+    } else {
+      // SCG自管配方：正常可点击、可选中、可删除喵~
+      html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" onclick="selectRecipe(' + i + ')">配方' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span>';
+      // 只有SCG配方数量>1时才显示删除按钮，确保至少保留一条喵~
+      if (scgCount > 1) html += '<span class="rtab-del" onclick="event.stopPropagation();deleteRecipe(' + i + ')">✕</span>';
+      html += '</div>';
+    }
   }
   $id('recipe-tabs').innerHTML = html;
 }
@@ -667,23 +712,33 @@ function doSelectItem(id) {
   var serverRecipes = d.recipes || [];
   // 喵~防御：只要配方列表非空就直接使用服务器数据，不依赖第一条type是否有值（否则第一条type为空时整个列表会退化为单配方）
   if (serverRecipes && serverRecipes.length > 0) {
+    // 有storedRecipes说明是SCG自管的配方，标记isBuiltin=false喵~
     recipesData = serverRecipes.map(function(r) {
       return {
         type: r.type || '',
         input: r.input || [],
         output: r.output || d.id,
         outputAmount: r.outputAmount || 1,
-        processingTime: r.processingTime || 0
+        processingTime: r.processingTime || 0,
+        isBuiltin: false  // 从Recipes.yml加载的都是SCG管理的配方，可编辑喵~
       };
     });
   } else {
     var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
     var defInput = defType ? (d.currentRecipe||[]) : [];
-    recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0}];
+    // 没有storedRecipes时，显示的是addon原生配方，标记isBuiltin=true（只读）喵~
+    recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: !!defType}];
   }
 
-  recipeIndex = 0;
-  loadRecipeState(0);
+  recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
+  // 喵~防御：优先选中第一个SCG配方（isBuiltin=false）作为默认选中项
+  // 如果全是addon配方，则fallback到第一个（只读展示）
+  var firstScgIdx = 0;
+  for (var ri = 0; ri < recipesData.length; ri++) {
+    if (!recipesData[ri].isBuiltin) { firstScgIdx = ri; break; }
+  }
+  recipeIndex = firstScgIdx;
+  loadRecipeState(recipeIndex);
   if (slots.length === 0 && currentTypeKey) slots = [null];
 
   $id('right-panel').style.display = 'block';
@@ -708,9 +763,15 @@ function resolveDisplayName(id) {
 function renderGrid() {
   var info = getTypeInfo(currentTypeKey);
   var cols = info.cols, total = info.slots;
+  // 判断当前配方是否为addon只读配方，用于渲染只读提示喵~
+  var readonly = isCurrentRecipeReadonly();
   while (slots.length < total) slots.push(null);
 
   var h = '';
+  // addon配方：在顶部显示只读提示横幅喵~
+  if (readonly) {
+    h += '<div style="padding:8px 14px;text-align:center;color:#d29922;background:#1a1600;border:1px solid #3b2f00;border-radius:6px;margin-bottom:10px;font-size:11px;">🔒 由addon提供，不支持修改</div>';
+  }
   h += '<div class="recipe-info">';
   h += '<span class="ri-name">' + MC.parseToHtml(info.name) + '</span>';
   h += '<span class="ri-dots">|</span>';
@@ -741,8 +802,20 @@ function renderGrid() {
 
   var out = $id('output-display');
   out.innerHTML = MC.parseToHtml(outputItemName) + ' <span>(' + esc(outputItemId) + ')</span>';
+  // addon只读配方：输出物品和数量控件禁用点击喵~
+  if (readonly) {
+    out.style.opacity = '0.5';
+    out.style.cursor = 'not-allowed';
+    out.style.pointerEvents = 'none';
+  } else {
+    out.style.opacity = '';
+    out.style.cursor = '';
+    out.style.pointerEvents = '';
+  }
   $id('amount-display').textContent = amount;
   $id('edit-time').value = processingTime || 0;
+  // addon只读时加工时间输入框也禁用喵~
+  $id('edit-time').disabled = readonly;
   $id('time-row').className = 'time-box' + (info.hasTime ? ' show' : '');
 }
 
@@ -758,13 +831,21 @@ function getTypeInfo(key) {
 }
 
 function renderTypeList() {
+  // addon配方只读时，合成方式列表禁用点击，样式灰显喵~
+  var readonly = isCurrentRecipeReadonly();
   var h = '';
   recipeTypes.forEach(function(t){
     if (isNullRecipeType(t.key)) return;
     if (t.isEditable === false) return; // 跳过不可编辑类型
     var builtinTag = t.isBuiltin ? '' : ' <span style="color:#d29922;font-size:9px;">addon</span>';
-    h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" onclick="changeType(\''+escKey(t.key)+'\')">'
-      + esc(t.name) + builtinTag + ' <span class="tns">' + esc(t.key) + '</span></div>';
+    if (readonly) {
+      // 只读模式：禁用pointer，鼠标不可点击喵~
+      h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" style="opacity:0.5;cursor:not-allowed;pointer-events:none;">'
+        + esc(t.name) + builtinTag + ' <span class="tns">' + esc(t.key) + '</span></div>';
+    } else {
+      h += '<div class="typeopt'+(t.key===currentTypeKey?' active':'')+'" onclick="changeType(\''+escKey(t.key)+'\')">'
+        + esc(t.name) + builtinTag + ' <span class="tns">' + esc(t.key) + '</span></div>';
+    }
   });
   $id('type-list').innerHTML = h;
   $id('edit-time').value = processingTime || 0;
@@ -773,6 +854,8 @@ function renderTypeList() {
 
 function changeType(key) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截合成方式切换操作
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   dlog('CHANGE', 'changeType: ' + currentTypeKey + ' -> ' + key);
   // 喵~修复BUG-10：切换合成类型前，检查新类型的maxSlots是否小于当前有内容的slot数量
   // 若会导致数据丢失，则弹confirm确认框，用户取消则不切换
@@ -815,6 +898,8 @@ function trimOverflowSlots() {
 
 function changeTime(val) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截加工时间修改
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   var t = parseInt(val) || 0;
   processingTime = Math.max(0, t);
   dlog('CHANGE', 'changeTime: ' + processingTime + ' tick');
@@ -825,6 +910,8 @@ function changeTime(val) {
 
 function openSlotPicker(idx) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截格子点击操作
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   pickerTarget = 'slot'; pickerSlotIdx = idx;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
@@ -833,6 +920,8 @@ function openSlotPicker(idx) {
 
 function openPicker(target) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截输出物品选择操作
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   pickerTarget = target; pickerSlotIdx = -1;
   $id('overlay').classList.add('show'); $id('popup').classList.add('show');
   $id('popup-search').value = ''; loadPopupMaterials('');
@@ -898,6 +987,8 @@ function closePicker() {
 
 function clearSlot(idx) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截清除格子操作
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   slots[idx] = null;
   renderGrid();
   updateYaml();
@@ -906,6 +997,8 @@ function clearSlot(idx) {
 
 function changeAmount(d) {
   if (saving) return;
+  // 喵~防御：addon配方不可编辑，拦截输出数量修改
+  if (isCurrentRecipeReadonly()) { showToast('由addon提供，不支持修改','info'); return; }
   amount = Math.max(1, Math.min(64, amount + d));
   $id('amount-display').textContent = amount;
   renderGrid();
@@ -915,7 +1008,8 @@ function changeAmount(d) {
 
 function updateYaml() {
   saveCurrentRecipeState();
-  var validRecipes = recipesData.filter(function(r){return !isNullRecipeType(r.type);});
+  // YAML预览只显示SCG自管（isBuiltin=false）的有效配方，不展示addon原生配方喵~
+  var validRecipes = recipesData.filter(function(r){return !isNullRecipeType(r.type) && !r.isBuiltin;});
   if (validRecipes.length === 0) {
     $id('yaml-preview').innerHTML = '<span style="color:#d29922;">请选择有效合成方式后预览 Recipes.yml</span>';
     return;
@@ -942,22 +1036,30 @@ function revertItem() {
   if (d) {
     var serverRecipes = d.recipes || [];
     if (serverRecipes.length > 0 && !isNullRecipeType(serverRecipes[0].type)) {
+      // 有storedRecipes：SCG管理的配方，isBuiltin=false喵~
       recipesData = serverRecipes.map(function(r) {
         return {
           type: r.type || '',
           input: r.input || [],
           output: r.output || d.id,
           outputAmount: r.outputAmount || 1,
-          processingTime: r.processingTime || 0
+          processingTime: r.processingTime || 0,
+          isBuiltin: false  // storedRecipes都是SCG自管的，可编辑喵~
         };
       });
     } else {
       var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
       var defInput = defType ? (d.currentRecipe||[]) : [];
-      recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0}];
+      // 没有storedRecipes：addon原生配方，isBuiltin=true（只读）喵~
+      recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: !!defType}];
     }
-    recipeIndex = 0;
-    loadRecipeState(0);
+    // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
+    var firstScgIdxRv = 0;
+    for (var rvi = 0; rvi < recipesData.length; rvi++) {
+      if (!recipesData[rvi].isBuiltin) { firstScgIdxRv = rvi; break; }
+    }
+    recipeIndex = firstScgIdxRv;
+    loadRecipeState(recipeIndex);
     if (slots.length === 0 && currentTypeKey) slots = [null];
     renderRecipeTabs();
     renderTypeList();
@@ -988,10 +1090,11 @@ function save() {
   if (saving) return;
   saveCurrentRecipeState();
   var hasValidRecipe = false;
+  // 只检查SCG自管的配方（isBuiltin=false），addon配方不参与保存检验喵~
   for (var i = 0; i < recipesData.length; i++) {
-    if (!isNullRecipeType(recipesData[i].type)) { hasValidRecipe = true; break; }
+    if (!recipesData[i].isBuiltin && !isNullRecipeType(recipesData[i].type)) { hasValidRecipe = true; break; }
   }
-  if (!hasValidRecipe) { showToast('请至少为一个配方选择有效合成方式','error'); return; }
+  if (!hasValidRecipe) { showToast('请至少为一个SCG配方选择有效合成方式','error'); return; }
   saving = true;
   var bag = $id('save-badge');
   bag.textContent = '保存中...'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
@@ -999,13 +1102,23 @@ function save() {
   var savingItemId = selectedItemId;
   var savingItemName = originalItemName;
   var savingDirtyVersion = dirtyVersion;
-  var recipeList = recipesData.filter(function(r){return !isNullRecipeType(r.type);}).map(function(r){
+  // 保存时只提交isBuiltin=false的SCG自管配方，过滤掉addon原生配方（isBuiltin=true）喵~
+  var recipeList = recipesData.filter(function(r){return !isNullRecipeType(r.type) && !r.isBuiltin;}).map(function(r){
     var typeInfo = getTypeInfo(r.type);
     var expectedSlots = typeInfo.slots || 9;
     var trimmedInput = (r.input || []).slice(0, expectedSlots);
     while (trimmedInput.length < expectedSlots) trimmedInput.push('AIR');
     return {type: r.type, input: trimmedInput, output: r.output, outputAmount: r.outputAmount || 1, processingTime: r.processingTime || 0};
   });
+  // 喵~防御：如果过滤后没有可保存的SCG配方，提示用户
+  if (recipeList.length === 0) {
+    saving = false;
+    bag.textContent = dirty ? '未保存' : '已保存';
+    bag.style.background = dirty ? '#2a1a1a' : '#1a2f1a';
+    bag.style.color = dirty ? '#f85149' : '#3fb950';
+    showToast('没有可保存的SCG自管配方（addon配方不可保存）','error');
+    return;
+  }
   var firstRecipe = recipeList[0];
   var payload = {items:{}};
   payload.items[savingItemId] = {recipes: recipeList};

@@ -26,6 +26,8 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 .btn-primary{background:#e94560;color:#fff;border-color:#e94560}
 .btn-primary:hover{background:#c73750}
 .btn-sm{padding:3px 8px;font-size:10px}
+.btn-xs{padding:2px 6px;font-size:10px}
+.btn-danger{background:#da3633;border-color:#da3633;color:#fff}
 .main{display:flex;flex:1;overflow:hidden}
 .panel{background:#161b22;border-right:1px solid #30363d;overflow-y:auto}
 .left{flex:0 0 240px;display:flex;flex-direction:column}
@@ -195,7 +197,37 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 </div>
 
 <div class="toast" id="toast"></div>
-<div id="modal-overlay"></div>
+
+<!-- 添加燃料弹窗 -->
+<div id="fuel-add-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300" onclick="closeFuelAddModal()"></div>
+<div id="fuel-add-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:420px;background:#161b22;border:1px solid #30363d;border-radius:8px;z-index:301;box-shadow:0 8px 32px rgba(0,0,0,0.6);flex-direction:column">
+  <div style="padding:10px 14px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:13px;color:#e94560">添加燃料</span>
+    <button class="btn btn-sm" onclick="closeFuelAddModal()">✕</button>
+  </div>
+  <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <div>
+      <div class="slabel">燃料物品 <span style="color:#f85149">*</span></div>
+      <input class="search-box" id="fuel-add-input-search" placeholder="搜索物品 ID 或名称..." oninput="fuelAddSearch('input')" style="margin:4px 0 0;width:100%">
+      <div id="fuel-add-input-results" style="background:#0d1117;border:1px solid #30363d;border-radius:4px;max-height:140px;overflow-y:auto;margin-top:2px;display:none"></div>
+      <div id="fuel-add-input-selected" style="margin-top:4px;padding:4px 8px;background:#1a2230;border:1px solid #30363d;border-radius:4px;font-size:11px;color:#3fb950;display:none"></div>
+    </div>
+    <div>
+      <div class="slabel">燃烧时间（秒）</div>
+      <input type="number" id="fuel-add-burn-time" value="16" min="1" style="width:100px;padding:5px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px">
+    </div>
+    <div>
+      <div class="slabel">产出物品（可选）</div>
+      <input class="search-box" id="fuel-add-output-search" placeholder="搜索产出物品（留空=无产出）..." oninput="fuelAddSearch('output')" style="margin:4px 0 0;width:100%">
+      <div id="fuel-add-output-results" style="background:#0d1117;border:1px solid #30363d;border-radius:4px;max-height:120px;overflow-y:auto;margin-top:2px;display:none"></div>
+      <div id="fuel-add-output-selected" style="margin-top:4px;padding:4px 8px;background:#1a2230;border:1px solid #30363d;border-radius:4px;font-size:11px;color:#3fb950;display:none"></div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #30363d">
+    <button class="btn btn-sm" onclick="closeFuelAddModal()">取消</button>
+    <button class="btn btn-primary btn-sm" onclick="confirmAddFuel()">确认添加</button>
+  </div>
+</div>
 
 <script>
 var currentTab = 'recipes';
@@ -224,7 +256,8 @@ function renderFuelGeneratorList() {
     if (q && g.name.toLowerCase().indexOf(q) < 0 && g.id.toLowerCase().indexOf(q) < 0) return;
     var active = selectedGenerator && selectedGenerator.id === g.id;
     h += '<div style="padding:6px 8px;cursor:pointer;border-radius:4px;margin-bottom:2px;'+(active?'background:#1f2937':'')+'" onclick="selectFuelGenerator(\''+g.id+'\')">';
-    h += '<div style="font-size:11px;color:#c9d1d9">'+MC.parseToHtml(g.name)+'</div>';
+    var addonTag = g.isBuiltin ? '' : '<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#1f3a1f;color:#3fb950;border:1px solid #2ea043;margin-left:4px">'+esc(g.addon||'addon')+'</span>';
+    h += '<div style="font-size:11px;color:#c9d1d9;display:flex;align-items:center">'+MC.parseToHtml(g.name)+addonTag+'</div>';
     h += '<div style="font-size:9px;color:#484f58">'+g.id+' | '+g.energyPerTick+' J/t | '+g.fuels.length+' 燃料</div>';
     h += '</div>';
   });
@@ -282,17 +315,77 @@ function removeFuel(index) {
 
 function addFuel() {
   if (!selectedGenerator) return;
-  var inputId = prompt('输入燃料物品 ID (如 minecraft:coal 或 slimefun:uranium):');
-  if (!inputId || !inputId.trim()) return;
-  inputId = inputId.trim();
-  var burnTime = parseInt(prompt('输入燃烧时间（秒）:', '16'));
-  if (!burnTime || burnTime <= 0) burnTime = 16;
-  var outputId = prompt('输入产出物品 ID（可留空）:') || null;
-  if (outputId) outputId = outputId.trim();
-  if (!outputId) outputId = null;
-  currentFuels.push({inputId:inputId, inputName:inputId, burnTime:burnTime, outputId:outputId, outputName:outputId});
+  fuelAddInputId = null; fuelAddOutputId = null;
+  $id('fuel-add-input-search').value = '';
+  $id('fuel-add-output-search').value = '';
+  $id('fuel-add-input-results').style.display = 'none';
+  $id('fuel-add-output-results').style.display = 'none';
+  $id('fuel-add-input-selected').style.display = 'none';
+  $id('fuel-add-output-selected').style.display = 'none';
+  $id('fuel-add-burn-time').value = '16';
+  $id('fuel-add-overlay').style.display = 'block';
+  $id('fuel-add-modal').style.display = 'flex';
+  setTimeout(function(){ $id('fuel-add-input-search').focus(); }, 50);
+}
+
+function closeFuelAddModal() {
+  $id('fuel-add-overlay').style.display = 'none';
+  $id('fuel-add-modal').style.display = 'none';
+}
+
+var fuelAddInputId = null, fuelAddOutputId = null;
+var fuelAddSearchTimers = {};
+
+function fuelAddSearch(field) {
+  var q = $id('fuel-add-' + field + '-search').value;
+  var resultsEl = $id('fuel-add-' + field + '-results');
+  if (fuelAddSearchTimers[field]) clearTimeout(fuelAddSearchTimers[field]);
+  if (!q.trim()) { resultsEl.style.display = 'none'; return; }
+  fuelAddSearchTimers[field] = setTimeout(function() {
+    fetch('/api/recipes/materials?q=' + encodeURIComponent(q))
+      .then(function(r){return r.json()})
+      .then(function(json){
+        var items = json.results || [];
+        if (!items.length) { resultsEl.innerHTML = '<div style="color:#484f58;padding:8px;text-align:center;font-size:11px">无匹配</div>'; resultsEl.style.display = 'block'; return; }
+        var h = '';
+        items.forEach(function(it){
+          var typeClass = it.type === 'SLIMEFUN' ? 'sf' : 'van';
+          var typeLabel = it.type === 'SLIMEFUN' ? 'SF' : '原版';
+          h += '<div class="popup-item" onclick="fuelAddSelect(\''+field+'\',\''+escKey(it.id)+'\',\''+escKey(it.display)+'\')">'
+            + '<span style="display:flex;align-items:center;gap:6px"><span class="p-type '+typeClass+'">'+typeLabel+'</span>'+MC.parseToHtml(it.display)+'</span>'
+            + '<span class="pid">'+esc(it.id)+'</span></div>';
+        });
+        resultsEl.innerHTML = h;
+        resultsEl.style.display = 'block';
+      });
+  }, 200);
+}
+
+function fuelAddSelect(field, id, name) {
+  if (field === 'input') fuelAddInputId = id;
+  else fuelAddOutputId = id;
+  var sel = $id('fuel-add-' + field + '-selected');
+  sel.innerHTML = MC.parseToHtml(name) + ' <span style="color:#484f58;font-size:10px;margin-left:6px">'+esc(id)+'</span>'
+    + ' <span style="cursor:pointer;color:#f85149;margin-left:auto" onclick="fuelAddClear(\''+field+'\')">×</span>';
+  sel.style.display = 'flex'; sel.style.alignItems = 'center';
+  $id('fuel-add-' + field + '-results').style.display = 'none';
+  $id('fuel-add-' + field + '-search').value = '';
+}
+
+function fuelAddClear(field) {
+  if (field === 'input') fuelAddInputId = null;
+  else fuelAddOutputId = null;
+  $id('fuel-add-' + field + '-selected').style.display = 'none';
+}
+
+function confirmAddFuel() {
+  if (!fuelAddInputId) { showToast('请先选择燃料物品','error'); return; }
+  var burnTime = parseInt($id('fuel-add-burn-time').value) || 16;
+  if (burnTime <= 0) burnTime = 16;
+  currentFuels.push({inputId:fuelAddInputId, inputName:fuelAddInputId, burnTime:burnTime, outputId:fuelAddOutputId, outputName:fuelAddOutputId});
   renderFuelTable();
-  dlog('FUEL','added fuel '+inputId+' burnTime='+burnTime);
+  closeFuelAddModal();
+  dlog('FUEL','added fuel '+fuelAddInputId+' burnTime='+burnTime);
 }
 
 function saveFuels() {
@@ -652,6 +745,7 @@ function renderTypeList() {
 function changeType(key) {
   if (saving) return;
   dlog('CHANGE', 'changeType: ' + currentTypeKey + ' -> ' + key);
+  saveCurrentRecipeState(); // 切换前先保存当前格子状态喵
   currentTypeKey = key;
   var info = getTypeInfo(key);
   while (slots.length < info.slots) slots.push(null);

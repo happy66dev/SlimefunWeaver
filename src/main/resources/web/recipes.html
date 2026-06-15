@@ -548,12 +548,9 @@ function loadRecipeState(idx) {
 
 function selectRecipe(idx) {
   if (idx === recipeIndex) return;
-  saveCurrentRecipeState();
-  loadRecipeState(idx);
-  renderTypeList();
-  renderGrid();
-  updateYaml();
-  renderRecipeTabs();
+  function doSwitch() { saveCurrentRecipeState(); loadRecipeState(idx); renderTypeList(); renderGrid(); updateYaml(); renderRecipeTabs(); }
+  if (dirty) { Dialog.confirm('当前配方有未保存修改，切换将丢弃修改，确定继续？', function(){ setDirty(false); doSwitch(); }); return; }
+  doSwitch();
 }
 
 function addRecipe() {

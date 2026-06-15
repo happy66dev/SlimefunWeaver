@@ -232,11 +232,22 @@ body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Microsoft YaHei',san
 <script>
 var currentTab = 'recipes';
 function switchTab(tab) {
+  // 切换到燃料tab前，若有未保存修改则弹confirm提示用户喵~
+  if (tab === 'fuels' && currentTab !== 'fuels' && fuelDirty) {
+    // 喵~防御：fuelDirty为true说明燃料有未保存修改，切换会触发loadFuels覆盖，需要用户确认
+    if (!confirm('燃料列表有未保存的修改，切换后将丢失这些修改，确定继续吗？')) {
+      // 用户取消，不切换tab，直接返回喵~
+      return;
+    }
+    // 用户确认丢弃，重置脏标志喵~
+    fuelDirty = false;
+  }
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(t) { t.classList.remove('active'); });
   document.querySelector('.tab-btn[data-tab="'+tab+'"]').classList.add('active');
   $id('recipe-panel').style.display = tab === 'recipes' ? 'flex' : 'none';
   $id('fuel-panel').style.display = tab === 'fuels' ? 'flex' : 'none';
+  // 只有切换到燃料tab时才重新加载，避免每次切换都覆盖未保存修改喵~
   if (tab === 'fuels') loadFuels();
 }
 function loadFuels() {
@@ -300,7 +311,7 @@ function renderFuelTable() {
   currentFuels.forEach(function(f, i){
     h += '<tr style="border-bottom:1px solid #21262d">';
     h += '<td style="padding:6px 8px">'+MC.parseToHtml(f.inputName)+'</td>';
-    h += '<td style="padding:6px 8px"><input type="number" value="'+f.burnTime+'" min="1" style="width:60px;padding:2px 4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:11px" onchange="currentFuels['+i+'].burnTime=parseInt(this.value)||1"></td>';
+    h += '<td style="padding:6px 8px"><input type="number" value="'+f.burnTime+'" min="1" style="width:60px;padding:2px 4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:11px" data-fuel-index="'+i+'" onchange="var idx=parseInt(this.dataset.fuelIndex);if(idx>=0&&idx<currentFuels.length){currentFuels[idx].burnTime=parseInt(this.value)||1;fuelDirty=true;}"></td>';
     h += '<td style="padding:6px 8px">'+(f.outputName ? MC.parseToHtml(f.outputName) : '<span style="color:#484f58">无</span>')+'</td>';
     h += '<td style="text-align:center;padding:6px 8px"><button class="btn btn-xs btn-danger" onclick="removeFuel('+i+')">×</button></td>';
     h += '</tr>';
@@ -334,6 +345,8 @@ function closeFuelAddModal() {
 }
 
 var fuelAddInputId = null, fuelAddOutputId = null;
+// 存储燃料物品和产出物品的display name，用于confirmAddFuel中显示正确名称喵~
+var fuelAddInputName = null, fuelAddOutputName = null;
 var fuelAddSearchTimers = {};
 
 function fuelAddSearch(field) {
@@ -362,8 +375,9 @@ function fuelAddSearch(field) {
 }
 
 function fuelAddSelect(field, id, name) {
-  if (field === 'input') fuelAddInputId = id;
-  else fuelAddOutputId = id;
+  // 分别存储input/output的ID和display name，供confirmAddFuel使用喵~
+  if (field === 'input') { fuelAddInputId = id; fuelAddInputName = name; }
+  else { fuelAddOutputId = id; fuelAddOutputName = name; }
   var sel = $id('fuel-add-' + field + '-selected');
   sel.innerHTML = MC.parseToHtml(name) + ' <span style="color:#484f58;font-size:10px;margin-left:6px">'+esc(id)+'</span>'
     + ' <span style="cursor:pointer;color:#f85149;margin-left:auto" onclick="fuelAddClear(\''+field+'\')">×</span>';
@@ -373,8 +387,9 @@ function fuelAddSelect(field, id, name) {
 }
 
 function fuelAddClear(field) {
-  if (field === 'input') fuelAddInputId = null;
-  else fuelAddOutputId = null;
+  // 清除燃料物品选择时同步清空display name喵~
+  if (field === 'input') { fuelAddInputId = null; fuelAddInputName = null; }
+  else { fuelAddOutputId = null; fuelAddOutputName = null; }
   $id('fuel-add-' + field + '-selected').style.display = 'none';
 }
 
@@ -382,7 +397,11 @@ function confirmAddFuel() {
   if (!fuelAddInputId) { showToast('请先选择燃料物品','error'); return; }
   var burnTime = parseInt($id('fuel-add-burn-time').value) || 16;
   if (burnTime <= 0) burnTime = 16;
-  currentFuels.push({inputId:fuelAddInputId, inputName:fuelAddInputId, burnTime:burnTime, outputId:fuelAddOutputId, outputName:fuelAddOutputId});
+  // 喵~防御：使用display name而非裸ID作为inputName/outputName，确保燃料列表显示正确名称
+  // fuelAddInputName/fuelAddOutputName由fuelAddSelect函数在用户选中时赋值
+  var resolvedInputName = fuelAddInputName || fuelAddInputId;  // 兜底：若name为空则回退到ID
+  var resolvedOutputName = fuelAddOutputId ? (fuelAddOutputName || fuelAddOutputId) : null;  // 无产出时为null
+  currentFuels.push({inputId:fuelAddInputId, inputName:resolvedInputName, burnTime:burnTime, outputId:fuelAddOutputId, outputName:resolvedOutputName});
   renderFuelTable();
   closeFuelAddModal();
   dlog('FUEL','added fuel '+fuelAddInputId+' burnTime='+burnTime);
@@ -482,6 +501,8 @@ var originalItemName = '';
 var fuelGenerators = [];
 var selectedGenerator = null;
 var currentFuels = [];
+// 燃料编辑器是否有未保存的修改，用于切换tab时提示用户喵~
+var fuelDirty = false;
 
 function $id(id) { return document.getElementById(id); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -615,7 +636,8 @@ function setDirty(v) {
 function selectItem(id) {
   if (saving) { showToast('正在保存，请稍后再切换物品','info'); return; }
   if (dirty && selectedItemId !== id) { Dialog.confirm('当前合成表有未保存修改，确定切换物品并丢弃这些修改？', function(){ doSelectItem(id); }); return; }
-  if (selectedItemId === id) { if (dirty) return; doSelectItem(id); return; }
+  // 喵~防御：点击已选中物品时，无论是否有未保存修改都直接返回，不重新加载（dirty=true已在上一行处理，dirty=false也无需重载）
+  if (selectedItemId === id) { return; }
   if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
   pendingSelectTimer = setTimeout(function(){ if (saving) return; $id('center-empty').style.display = 'none'; $id('center-panel').style.display = ''; $id('center-panel').innerHTML = '<div style="text-align:center;color:#484f58;padding-top:60px;">加载中...</div>'; setDirty(false); doSelectItem(id); }, 40);
 }
@@ -637,7 +659,8 @@ function doSelectItem(id) {
   renderItemList($id('item-search').value);
 
   var serverRecipes = d.recipes || [];
-  if (serverRecipes.length > 0 && !isNullRecipeType(serverRecipes[0].type)) {
+  // 喵~防御：只要配方列表非空就直接使用服务器数据，不依赖第一条type是否有值（否则第一条type为空时整个列表会退化为单配方）
+  if (serverRecipes && serverRecipes.length > 0) {
     recipesData = serverRecipes.map(function(r) {
       return {
         type: r.type || '',

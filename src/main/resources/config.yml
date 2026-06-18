@@ -1,5 +1,4 @@
 enable-custom-guide: true
-debug: false
 
 web-editor:
   enabled: false

@@ -134,16 +134,6 @@ public final class SlimefunWeaver extends JavaPlugin implements SlimefunAddon {
         return getConfig().getBoolean("enable-custom-guide", true);
     }
 
-    public boolean isDebugEnabled() {
-        return getConfig().getBoolean("debug", false);
-    }
-
-    public static void debug(Player player, String msg) {
-        SlimefunWeaver pl = getInstance();
-        if (pl == null || !pl.isDebugEnabled()) return;
-        player.sendMessage("§8[§6SCG-Debug§8] §7" + msg);
-    }
-
     public CustomGuideListener getGuideListener() { return guideListener; }
 
     public Set<UUID> getExternalViewActive() { return externalViewActive; }

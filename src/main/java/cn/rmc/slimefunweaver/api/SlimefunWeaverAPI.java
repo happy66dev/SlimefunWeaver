@@ -35,14 +35,12 @@ public final class SlimefunWeaverAPI {
     public static void openOrRestore(Player player, ItemStack guide) {
         SlimefunWeaver pl = plugin();
         if (pl == null) return;
-        SlimefunWeaver.debug(player, "API.openOrRestore: redirecting to SCG");
         pl.getGuideListener().handleGuideOpenFromReturn(player, guide);
     }
 
     public static void markExternalView(Player player) {
         SlimefunWeaver pl = plugin();
         if (pl == null) return;
-        SlimefunWeaver.debug(player, "API.markExternalView: setting tracking flag");
         pl.getExternalViewActive().add(player.getUniqueId());
     }
 
@@ -57,7 +55,6 @@ public final class SlimefunWeaverAPI {
         if (pl == null) return;
         if (pl.getSuppressPush().contains(player.getUniqueId())) return;
         if (!pl.getExternalViewActive().contains(player.getUniqueId())) return;
-        SlimefunWeaver.debug(player, "API.pushNestedDetail: pushing " + slimefunId);
         pl.getGuideListener().pushNestedItem(player, slimefunId);
     }
 

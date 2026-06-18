@@ -159,7 +159,6 @@ public class RecipeApiHandler implements HttpHandler {
             serveJson(exchange, "{\"results\":[]}");
             return;
         }
-        if (plugin.isDebugEnabled()) plugin.getLogger().info("[RecipeAPI] materials search q=" + q);
         StringBuilder sb = new StringBuilder("{\"results\":[");
         boolean first = true;
         int count = 0;

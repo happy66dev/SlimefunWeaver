@@ -79,9 +79,6 @@ public class CustomGuideListener implements Listener {
     }
 
     public void handleGuideOpen(Player player, ItemStack guide) {
-        SlimefunWeaver.debug(player, "handleGuideOpen: opening, tracking=" +
-                plugin.getExternalViewActive().contains(player.getUniqueId()));
-
         plugin.getExternalViewActive().remove(player.getUniqueId());
         plugin.getScgCloseDedup().remove(player.getUniqueId());
 
@@ -110,7 +107,6 @@ public class CustomGuideListener implements Listener {
 
     public void handleGuideOpenFromReturn(Player player, ItemStack guide) {
         plugin.getExternalViewActive().remove(player.getUniqueId());
-        SlimefunWeaver.debug(player, "handleGuideOpenFromReturn: popping back to last category");
         plugin.getScgCloseDedup().remove(player.getUniqueId());
 
         CustomGuideHistory history = histories.get(player);
@@ -140,7 +136,6 @@ public class CustomGuideListener implements Listener {
         if (history == null) return;
         history.pushItem(slimefunId);
         saveState(player, history);
-        SlimefunWeaver.debug(player, "pushNestedItem: pushed " + slimefunId + ", saved NBT");
     }
 
     public String navigateBackItem(Player player) {
@@ -151,13 +146,11 @@ public class CustomGuideListener implements Listener {
 
         if (!history.hasHistory() || history.getCurrent().isCategory()) {
             plugin.getExternalViewActive().remove(player.getUniqueId());
-            SlimefunWeaver.debug(player, "navigateBackItem: popped to category, clearing tracking");
             return null;
         }
 
         CustomGuideHistory.ItemEntry prev = (CustomGuideHistory.ItemEntry) history.getCurrent();
         saveState(player, history);
-        SlimefunWeaver.debug(player, "navigateBackItem: popped to " + prev.getSlimefunId());
         return prev.getSlimefunId();
     }
 
@@ -196,7 +189,6 @@ public class CustomGuideListener implements Listener {
             meta.getPersistentDataContainer().remove(SAVE_KEY);
             guide.setItemMeta(meta);
         }
-        SlimefunWeaver.debug(player, "clearAllState: all SCG state removed");
     }
 
     public CustomGuideHistory getHistory(Player player) { return histories.get(player); }
@@ -209,16 +201,13 @@ public class CustomGuideListener implements Listener {
 
         if (tracking) {
             plugin.getScgMenuOpen().remove(p.getUniqueId());
-            SlimefunWeaver.debug(p, "onInventoryClose: tracking active, clearing scgMenuOpen");
             return;
         }
 
         if (plugin.getScgMenuOpen().remove(p.getUniqueId())) {
             if (!plugin.getScgCloseDedup().add(p.getUniqueId())) {
-                SlimefunWeaver.debug(p, "onInventoryClose: duplicate close event, skipped");
                 return;
             }
-            SlimefunWeaver.debug(p, "onInventoryClose: SCG menu closing, saving state");
             CustomGuideHistory history = histories.get(p);
             if (history != null) saveState(p, history);
         }
@@ -241,7 +230,6 @@ public class CustomGuideListener implements Listener {
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
 
         String breadcrumb = buildBreadcrumb(history);
-        SlimefunWeaver.debug(player, "saveState: NBT = " + breadcrumb);
         pdc.set(SAVE_KEY, PersistentDataType.STRING, breadcrumb);
         guide.setItemMeta(meta);
     }
@@ -276,8 +264,6 @@ public class CustomGuideListener implements Listener {
         String saved = pdc.get(SAVE_KEY, PersistentDataType.STRING);
         if (saved == null || saved.isEmpty()) return false;
 
-        SlimefunWeaver.debug(player, "tryRestore: NBT = " + saved);
-
         String[] parts = saved.split("\\|");
         int mainPage = 1;
         if (parts.length > 0) {
@@ -297,7 +283,6 @@ public class CustomGuideListener implements Listener {
                 if (!itemId.isEmpty()) {
                     SlimefunItem sfItem = IconParser.findSlimefunItem(itemId);
                     if (sfItem == null) {
-                        SlimefunWeaver.debug(player, "tryRestore: item not found: " + itemId + ", chain broken");
                         chainBroken = true;
                         break;
                     }
@@ -309,7 +294,6 @@ public class CustomGuideListener implements Listener {
                 if (catParts.length == 0) continue;
                 CustomCategory targetCat = findCategoryByKey(plugin.getRootCategories(), catParts[0]);
                 if (targetCat == null) {
-                    SlimefunWeaver.debug(player, "tryRestore: category not found: " + catParts[0] + ", chain broken");
                     chainBroken = true;
                     break;
                 }
@@ -334,7 +318,6 @@ public class CustomGuideListener implements Listener {
 
         if (lastCategory != null) {
             if (lastItemId != null) {
-                SlimefunWeaver.debug(player, "tryRestore: jumping directly to item " + lastItemId);
                 final String finalItemId = lastItemId;
                 final SlimefunGuideMode finalMode = mode;
                 plugin.getExternalViewActive().add(player.getUniqueId());

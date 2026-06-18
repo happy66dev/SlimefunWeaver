@@ -67,7 +67,6 @@ public class CustomGuideRenderer {
 
     public void openMainMenu(Player player, CustomGuideHistory history,
                              SlimefunGuideMode mode, int page) {
-        SlimefunWeaver.debug(player, "openMainMenu: page=" + page + " mode=" + mode);
         CustomCategory dummyRoot = new CustomCategory(ROOT_KEY, "Root",
                 new IconSource(IconType.VANILLA, "BOOK"), null, 1, 0, false);
         for (CustomCategory cat : plugin.getRootCategories()) {
@@ -81,12 +80,9 @@ public class CustomGuideRenderer {
     public void openMenu(Player player, CustomGuideHistory history,
                           SlimefunGuideMode mode, CustomCategory category, int page) {
         if (category == null) {
-            SlimefunWeaver.debug(player, "openMenu: category is null, opening main menu");
             openMainMenu(player, history, mode, 1);
             return;
         }
-        SlimefunWeaver.debug(player, "openMenu: cat=" + category.getKey() + " page=" + page +
-                " stackSize=" + history.getStack().size());
         history.setCurrentCategory(category);
         history.setCurrentPage(page);
         List<GuideTreeNode> children = category.getChildren();
@@ -118,7 +114,6 @@ public class CustomGuideRenderer {
 
         menu.addItem(SETTINGS_SLOT, ChestMenuUtils.getMenuButton(player));
         menu.addMenuClickHandler(SETTINGS_SLOT, (pl, s, is, action) -> {
-            SlimefunWeaver.debug(pl, "SETTINGS click: marking externalView + opening settings");
             SlimefunWeaverAPI.markExternalView(pl);
             SlimefunGuideSettings.openSettings(pl, pl.getInventory().getItemInMainHand());
             return false;
@@ -146,7 +141,6 @@ public class CustomGuideRenderer {
                             "&fShift + \u5de6\u952e: &7\u8fd4\u56de\u6839\u76ee\u5f55")));
             menu.addMenuClickHandler(slot, (pl, s1, is1, action1) -> {
                 if (action1.isShiftClicked()) {
-                    SlimefunWeaver.debug(pl, "BACK click: shift-click, clearing history to main menu");
                     history.clear();
                     openMainMenu(pl, history, mode, history.getMainMenuPage());
                 } else {
@@ -198,7 +192,6 @@ public class CustomGuideRenderer {
             if (child.getType() == TreeNodeType.CATEGORY) {
                 CustomCategory cat = (CustomCategory) child;
                 menu.addMenuClickHandler(absSlot, (pl, s, is, action) -> {
-                    SlimefunWeaver.debug(pl, "CATEGORY click: " + cat.getKey() + " from page " + page);
                     history.push(cat, page);
                     openMenu(pl, history, mode, cat, 1);
                     return false;
@@ -208,7 +201,6 @@ public class CustomGuideRenderer {
                 menu.addMenuClickHandler(absSlot, (pl, s, is, action) -> {
                     CustomCategory target = findCategoryByKey(plugin.getRootCategories(), ref.getTargetCategoryKey());
                     if (target != null) {
-                        SlimefunWeaver.debug(pl, "REFERENCE click: " + ref.getTargetCategoryKey() + " from page " + page);
                         history.pushForce(category, page);
                         openMenu(pl, history, mode, target, 1);
                     }
@@ -222,8 +214,6 @@ public class CustomGuideRenderer {
                             if (mode == SlimefunGuideMode.CHEAT_MODE) {
                                 handleCheatItemClick(pl, slimefunItem, action.isShiftClicked());
                             } else {
-                                SlimefunWeaver.debug(pl, "ITEM click: id=" + ((CustomItemEntry) child).getSlimefunId() +
-                                        ", marking externalView");
                                 SlimefunWeaverAPI.markExternalView(pl);
                                 Slimefun.getRegistry().getSlimefunGuide(mode).displayItem(profile, slimefunItem, true);
                             }

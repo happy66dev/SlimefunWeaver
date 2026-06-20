@@ -71,6 +71,8 @@ public class RecipeApiHandler implements HttpHandler {
         // 喵~以下三个原来漏掉了，均是 MultiBlock 机器，register() 走 mbm.addRecipe() 支持编辑喵
         // 注意：gold_pan / ore_washer 输出随机，不加入可编辑列表喵
         EDITABLE_RECIPE_TYPES.add("slimefun:pressure_chamber");
+        // 喵~无配方类型也加入可编辑列表，允许用户将物品配方设置为空喵
+        EDITABLE_RECIPE_TYPES.add("slimefun:null");
     }
 
     private static final Map<String, Integer> ADDON_RECIPE_TYPE_SLOTS = new LinkedHashMap<>();
@@ -618,7 +620,8 @@ public class RecipeApiHandler implements HttpHandler {
                 if (!recipeElement.isJsonObject()) continue;
                 JsonObject recipeObj = recipeElement.getAsJsonObject();
                 String type = jsonString(recipeObj, "type");
-                if (isNullRecipeType(type)) continue;
+                // 喵~slimefun:null 是合法的"无配方"类型，允许保存；其他 null 才跳过喵
+                if (type != null && !type.equalsIgnoreCase("slimefun:null") && isNullRecipeType(type)) continue;
                 Map<String, Object> map = new LinkedHashMap<>();
                 if (type != null) map.put("type", type);
                 JsonArray inputArray = jsonArray(recipeObj, "input");
@@ -874,6 +877,8 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private static RecipeType findRecipeTypeByKey(String key, Map<String, RecipeType> resolved) {
+        // 喵~slimefun:null 特殊处理：直接返回 RecipeType.NULL，不走 isNullRecipeType 过滤喵
+        if ("slimefun:null".equalsIgnoreCase(key)) return RecipeType.NULL;
         if (isNullRecipeType(key)) return null;
         RecipeType cached = resolved.get(key);
         if (cached != null) return cached;

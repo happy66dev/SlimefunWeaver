@@ -272,7 +272,7 @@ function renderFuelGeneratorList() {
     if (q && g.name.toLowerCase().indexOf(q) < 0 && g.id.toLowerCase().indexOf(q) < 0) return;
     var active = selectedGenerator && selectedGenerator.id === g.id;
     h += '<div style="padding:6px 8px;cursor:pointer;border-radius:4px;margin-bottom:2px;'+(active?'background:#1f2937':'')+'" onclick="selectFuelGenerator(\''+g.id+'\')">';
-    var addonTag = g.isBuiltin ? '' : '<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#1f3a1f;color:#3fb950;border:1px solid #2ea043;margin-left:4px">'+esc(g.addon||'addon')+'</span>';
+    var addonTag = g.isBuiltin ? '' : '';
     h += '<div style="font-size:11px;color:#c9d1d9;display:flex;align-items:center">'+MC.parseToHtml(g.name)+addonTag+'</div>';
     h += '<div style="font-size:9px;color:#484f58">'+g.id+' | '+g.energyPerTick+' J/t | '+g.fuels.length+' 燃料</div>';
     h += '</div>';
@@ -835,8 +835,7 @@ function renderTypeList() {
   var readonly = isCurrentRecipeReadonly();
   var h = '';
   recipeTypes.forEach(function(t){
-    if (isNullRecipeType(t.key)) return;
-    if (t.isEditable === false) return; // 跳过不可编辑类型
+    if (t.isEditable === false) return; // 喵~跳过不可编辑类型（如mob_drop等）喵
     var builtinTag = t.isBuiltin ? '' : ' <span style="color:#d29922;font-size:9px;">addon</span>';
     if (readonly) {
       // 只读模式：禁用pointer，鼠标不可点击喵~
@@ -1081,7 +1080,8 @@ function save() {
   var hasValidRecipe = false;
   // 只检查SCG自管的配方（isBuiltin=false），addon配方不参与保存检验喵~
   for (var i = 0; i < recipesData.length; i++) {
-    if (!recipesData[i].isBuiltin && !isNullRecipeType(recipesData[i].type)) { hasValidRecipe = true; break; }
+    // 喵~slimefun:null 是合法的"无配方"类型，也算有效喵
+    if (!recipesData[i].isBuiltin && (!isNullRecipeType(recipesData[i].type) || recipesData[i].type === 'slimefun:null')) { hasValidRecipe = true; break; }
   }
   if (!hasValidRecipe) { showToast('请至少为一个SCG配方选择有效合成方式','error'); return; }
   saving = true;

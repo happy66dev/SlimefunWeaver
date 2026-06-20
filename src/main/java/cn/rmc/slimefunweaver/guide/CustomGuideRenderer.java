@@ -43,7 +43,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -156,13 +155,8 @@ public class CustomGuideRenderer {
                 return false;
             });
         } else {
-            ItemStack placeholder = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-            ItemMeta phMeta = placeholder.getItemMeta();
-            if (phMeta != null) {
-                phMeta.setDisplayName(" ");
-                placeholder.setItemMeta(phMeta);
-            }
-            menu.addItem(slot, placeholder);
+            // 喵~无历史时用 SF4 的 _UI_BACKGROUND 占位符，支持自定义材质喵
+            menu.addItem(slot, ChestMenuUtils.getBackground(), ChestMenuUtils.getEmptyClickHandler());
         }
     }
 

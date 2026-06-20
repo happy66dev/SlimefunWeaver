@@ -253,17 +253,7 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private void detectAddonRecipeTypes(Map<String, RecipeType> resolved) {
-        if (addonDetected) return;
-        for (Map.Entry<String, RecipeType> entry : resolved.entrySet()) {
-            String key = entry.getKey();
-            if (key.startsWith("galactifun:") && key.contains("assembly")) {
-                EDITABLE_RECIPE_TYPES.add(key);
-                ADDON_RECIPE_TYPE_SLOTS.put(key, 9);
-            } else if (key.startsWith("infinityexpansion:") && (key.contains("storage") || key.contains("infinity"))) {
-                EDITABLE_RECIPE_TYPES.add(key);
-                ADDON_RECIPE_TYPE_SLOTS.put(key, 9);
-            }
-        }
+        // 喵~galactifun/infinityexpansion 的合成方式不注册为可编辑，保持只读展示喵
         addonDetected = true;
     }
 

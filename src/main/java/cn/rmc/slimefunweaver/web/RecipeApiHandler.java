@@ -746,22 +746,40 @@ public class RecipeApiHandler implements HttpHandler {
     private static void rebuildMachineRecipesFromOriginals() {
         Map<MultiBlockMachine, List<ItemStack[]>> toRebuild = new LinkedHashMap<>();
 
-        // 喵~所有物品都从原始快照重建 MultiBlockMachine 配方列表，不跳过 storedRecipes 里的物品
-        // 原来跳过 storedRecipes 物品的逻辑会导致 addon 主配方在 clearRecipe 后丢失喵
+        // 喵~从快照重建所有 MultiBlockMachine 的配方列表喵
+        // 同时包含主配方和 additionalRecipes，确保与 restore 后的状态完全一致喵
         for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
+            RecipeSnapshot snap = entry.getValue();
             SlimefunItem item = IconParser.findSlimefunItem(entry.getKey());
-            if (item == null || item.getRecipe() == null) continue;
-            String machineId = getRecipeTypeMachineId(entry.getValue().type);
-            if (machineId == null) continue;
-            SlimefunItem mItem = SlimefunItem.getById(machineId);
-            if (mItem instanceof MultiBlockMachine) {
-                MultiBlockMachine mbm = (MultiBlockMachine) mItem;
-                ItemStack output = item.getRecipeOutput();
-                if (output == null) continue;
-                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(item.getRecipe());
-                toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{output});
+            if (item == null) continue;
+
+            // 喵~主配方喵
+            String machineId = getRecipeTypeMachineId(snap.type);
+            if (machineId != null) {
+                SlimefunItem mItem = SlimefunItem.getById(machineId);
+                if (mItem instanceof MultiBlockMachine && snap.recipe != null && snap.output != null) {
+                    MultiBlockMachine mbm = (MultiBlockMachine) mItem;
+                    toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(snap.recipe);
+                    toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{snap.output});
+                }
+            }
+
+            // 喵~additionalRecipes（用于 SCG 追加过的配方也能正确还原）喵
+            for (RecipeEntry additionalEntry : snap.additionalRecipes) {
+                String addMachineId = getRecipeTypeMachineId(additionalEntry.getRecipeType());
+                if (addMachineId == null) continue;
+                SlimefunItem mItem = SlimefunItem.getById(addMachineId);
+                if (mItem instanceof MultiBlockMachine) {
+                    MultiBlockMachine mbm = (MultiBlockMachine) mItem;
+                    ItemStack addOutput = additionalEntry.getRecipeOutput();
+                    if (additionalEntry.getRecipe() != null && addOutput != null) {
+                        toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(additionalEntry.getRecipe());
+                        toRebuild.computeIfAbsent(mbm, k -> new ArrayList<>()).add(new ItemStack[]{addOutput});
+                    }
+                }
             }
         }
+
         for (MultiBlockMachine mbm : toRebuild.keySet()) {
             mbm.clearRecipe();
         }

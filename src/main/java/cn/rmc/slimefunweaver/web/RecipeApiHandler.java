@@ -333,21 +333,23 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
-            // addonRecipes：始终输出原始配方（含可编辑类型），供前端只读展示喵
-            // 无SCG配方且类型可编辑时，前端会额外追加一条空SCG配方供编辑喵
+            // addonRecipes：只输出不可编辑类型的只读配方；可编辑类型由前端从currentRecipe预填充喵
             sb.append("\"addonRecipes\":[");
             RecipeSnapshot snap = originalRecipes.get(id);
             List<String> addonJsonParts = new ArrayList<>();
             if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
                 String snapRtKey = snap.type.getKey().toString();
-                ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
-                for (ItemStack stack : snapRecipe) {
-                    String stackId = itemIdFromStack(stack);
-                    names.put(stackId, displayNameFromStack(stack, stackId));
+                if (!EDITABLE_RECIPE_TYPES.contains(snapRtKey)) {
+                    ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
+                    for (ItemStack stack : snapRecipe) {
+                        String stackId = itemIdFromStack(stack);
+                        names.put(stackId, displayNameFromStack(stack, stackId));
+                    }
+                    addonJsonParts.add(defaultRecipeJson(id, snapRtKey, snapRecipe));
                 }
-                addonJsonParts.add(defaultRecipeJson(id, snapRtKey, snapRecipe));
                 for (RecipeEntry entry : snap.additionalRecipes) {
                     String entryRtKey = entry.getRecipeType().getKey().toString();
+                    if (EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
                     ItemStack[] entryRecipe = entry.getRecipe();
                     for (ItemStack stack : entryRecipe) {
                         String stackId = itemIdFromStack(stack);
@@ -968,7 +970,7 @@ public class RecipeApiHandler implements HttpHandler {
             case "ore_washer": case "oil_pump": case "geo_miner":
             case "miner_android": case "fisherman_android":
             case "nuclear_reactor": case "automated_panning_machine":
-                return 2;
+                return 1;
             default: return 1;
         }
     }

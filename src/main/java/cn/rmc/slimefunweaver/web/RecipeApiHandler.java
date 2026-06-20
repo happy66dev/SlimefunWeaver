@@ -333,26 +333,21 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
-            // addonRecipes：只输出 type 不在 EDITABLE_RECIPE_TYPES 里的只读配方喵
-            // 可编辑类型的原始配方不在此处输出，由前端从 currentRecipeType/currentRecipe 预填充喵
+            // addonRecipes：始终输出原始配方（含可编辑类型），供前端只读展示喵
+            // 无SCG配方且类型可编辑时，前端会额外追加一条空SCG配方供编辑喵
             sb.append("\"addonRecipes\":[");
             RecipeSnapshot snap = originalRecipes.get(id);
             List<String> addonJsonParts = new ArrayList<>();
             if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
                 String snapRtKey = snap.type.getKey().toString();
-                // 喵~主配方只在不可编辑类型时放入 addonRecipes（可编辑类型前端会预填充）喵
-                if (!EDITABLE_RECIPE_TYPES.contains(snapRtKey)) {
-                    ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
-                    for (ItemStack stack : snapRecipe) {
-                        String stackId = itemIdFromStack(stack);
-                        names.put(stackId, displayNameFromStack(stack, stackId));
-                    }
-                    addonJsonParts.add(defaultRecipeJson(id, snapRtKey, snapRecipe));
+                ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
+                for (ItemStack stack : snapRecipe) {
+                    String stackId = itemIdFromStack(stack);
+                    names.put(stackId, displayNameFromStack(stack, stackId));
                 }
-                // 喵~additionalRecipes 中，同样只放不可编辑类型的配方喵
+                addonJsonParts.add(defaultRecipeJson(id, snapRtKey, snapRecipe));
                 for (RecipeEntry entry : snap.additionalRecipes) {
                     String entryRtKey = entry.getRecipeType().getKey().toString();
-                    if (EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
                     ItemStack[] entryRecipe = entry.getRecipe();
                     for (ItemStack stack : entryRecipe) {
                         String stackId = itemIdFromStack(stack);

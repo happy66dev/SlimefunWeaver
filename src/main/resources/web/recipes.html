@@ -869,11 +869,18 @@ function changeType(key) {
   }
   // 如果新类型的格子数少于当前有内容的格子范围，说明会丢失数据
   if (filledCount > 0) {
-    // 喵~防御：会丢失filledCount个有内容的格子，需要用户确认
-    if (!confirm('切换合成方式后，将有 ' + filledCount + ' 个已填写的格子超出范围并被清除，确定继续吗？')) {
-      // 用户取消，恢复select的显示值，不切换type，直接返回喵~
-      return;
-    }
+    Dialog.confirm('切换合成方式后，将有 <b>' + filledCount + '</b> 个已填写的格子超出范围并被清除，确定继续吗？', function() {
+      saveCurrentRecipeState();
+      currentTypeKey = key;
+      var info = getTypeInfo(key);
+      while (slots.length < info.slots) slots.push(null);
+      trimOverflowSlots();
+      renderTypeList();
+      renderGrid();
+      updateYaml();
+      setDirty(true);
+    });
+    return;
   }
   saveCurrentRecipeState(); // 切换前先保存当前格子状态喵~
   currentTypeKey = key;

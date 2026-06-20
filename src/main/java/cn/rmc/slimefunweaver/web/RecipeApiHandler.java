@@ -858,8 +858,16 @@ public class RecipeApiHandler implements HttpHandler {
 
     private String itemIdFromStack(ItemStack stack) {
         if (stack == null || stack.getType() == Material.AIR) return "AIR";
+        // 喵~优先读 PDC（SlimefunItemStack 或已写入 PDC 的物品）喵
         SlimefunItem sfItem = SlimefunItem.getByItem(stack);
         if (sfItem != null) return sfItem.getId();
+        // 喵~PDC 未命中时，遍历注册表用 isItemSimilar 逐一比对喵
+        // 覆盖 addon 物品在快照时 PDC 未写入的场景（clone 丢失 SlimefunItemStack 类型）喵
+        for (SlimefunItem candidate : io.github.thebusybiscuit.slimefun4.implementation.Slimefun.getRegistry().getEnabledSlimefunItems()) {
+            if (io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils.isItemSimilar(stack, candidate.getItem(), false, false)) {
+                return candidate.getId();
+            }
+        }
         return stack.getType().name();
     }
 

@@ -1084,13 +1084,7 @@ function save() {
   if (!selectedItemId) { showToast('请先选择物品','error'); return; }
   if (saving) return;
   saveCurrentRecipeState();
-  var hasValidRecipe = false;
-  // 只检查SCG自管的配方（isBuiltin=false），addon配方不参与保存检验喵~
-  for (var i = 0; i < recipesData.length; i++) {
-    // 喵~slimefun:null 是合法的"无配方"类型，也算有效喵
-    if (!recipesData[i].isBuiltin && (!isNullRecipeType(recipesData[i].type) || recipesData[i].type === 'slimefun:null')) { hasValidRecipe = true; break; }
-  }
-  if (!hasValidRecipe) { showToast('请至少为一个SCG配方选择有效合成方式','error'); return; }
+  // 喵~无需检验：全为空type等于删除所有SCG配方，也是合法操作喵
   saving = true;
   var bag = $id('save-badge');
   bag.textContent = '保存中...'; bag.style.background='#2a1a1a'; bag.style.color='#f85149';
@@ -1099,6 +1093,7 @@ function save() {
   var savingItemName = originalItemName;
   var savingDirtyVersion = dirtyVersion;
   // 保存时只提交isBuiltin=false的SCG自管配方，过滤掉addon原生配方（isBuiltin=true）喵~
+  // slimefun:null 也过滤掉（无配方=删除，不需要写入 Recipes.yml）喵~
   var recipeList = recipesData.filter(function(r){return !isNullRecipeType(r.type) && !r.isBuiltin;}).map(function(r){
     var typeInfo = getTypeInfo(r.type);
     var expectedSlots = typeInfo.slots || 9;
@@ -1106,16 +1101,8 @@ function save() {
     while (trimmedInput.length < expectedSlots) trimmedInput.push('AIR');
     return {type: r.type, input: trimmedInput, output: r.output, outputAmount: r.outputAmount || 1, processingTime: r.processingTime || 0};
   });
-  // 喵~防御：如果过滤后没有可保存的SCG配方，提示用户
-  if (recipeList.length === 0) {
-    saving = false;
-    bag.textContent = dirty ? '未保存' : '已保存';
-    bag.style.background = dirty ? '#2a1a1a' : '#1a2f1a';
-    bag.style.color = dirty ? '#f85149' : '#3fb950';
-    showToast('没有可保存的SCG自管配方（addon配方不可保存）','error');
-    return;
-  }
-  var firstRecipe = recipeList[0];
+  // 喵~recipeList 为空表示删除所有SCG配方，合法操作，直接发送空列表给后端喵
+  var firstRecipe = recipeList.length > 0 ? recipeList[0] : null;
   var payload = {items:{}};
   payload.items[savingItemId] = {recipes: recipeList};
 
@@ -1129,13 +1116,13 @@ function save() {
   }).then(function(){
     itemData[savingItemId] = {
       id: savingItemId, name: savingItemName,
-      currentRecipeType: firstRecipe.type,
-      currentRecipe: firstRecipe.input.slice(),
+      currentRecipeType: firstRecipe ? firstRecipe.type : null,
+      currentRecipe: firstRecipe ? firstRecipe.input.slice() : [],
       recipes: recipeList
     };
     for (var i = 0; i < allItems.length; i++) {
       if (allItems[i].id === savingItemId) {
-        allItems[i].rt = firstRecipe.type;
+        allItems[i].rt = firstRecipe ? firstRecipe.type : '';
         break;
       }
     }

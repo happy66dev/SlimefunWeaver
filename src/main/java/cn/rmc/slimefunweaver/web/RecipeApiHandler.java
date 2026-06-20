@@ -891,19 +891,21 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     private String readDisplayName(RecipeType rt, String key) {
-        try {
-            ItemStack rtItem = rt.toItem();
-            if (rtItem != null && rtItem.hasItemMeta() && rtItem.getItemMeta().hasLore()) {
-                for (String lore : rtItem.getItemMeta().getLore()) {
-                    if (lore != null && !lore.trim().isEmpty())
-                    return ColorUtil.stripColorCodes(lore.trim());
-                }
-            }
-        } catch (Exception ignored) {}
+        // \u55B5~\u4F18\u5148\u7528\u5185\u7F6E\u4E2D\u6587\u540D\u6620\u5C04\uFF0C\u907F\u514D\u8BFB\u5230\u82F1\u6587 lore\uFF08\u5982 "A regular Crafting Table cannot..."\uFF09\u55B5
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
         if ("null".equals(shortKey)) return "\u65E0\u7279\u5B9A\u5408\u6210\u65B9\u5F0F";
         String chinese = builtinRecipeTypeName(shortKey);
         if (chinese != null) return chinese;
+        // \u6CA1\u6709\u4E2D\u6587\u6620\u5C04\u65F6\u518D\u5C1D\u8BD5\u8BFB lore\uFF08addon \u81EA\u5B9A\u4E49\u7C7B\u578B\uFF09\u55B5
+        try {
+            ItemStack rtItem = rt != null ? rt.toItem() : null;
+            if (rtItem != null && rtItem.hasItemMeta() && rtItem.getItemMeta().hasLore()) {
+                for (String lore : rtItem.getItemMeta().getLore()) {
+                    if (lore != null && !lore.trim().isEmpty())
+                        return ColorUtil.stripColorCodes(lore.trim());
+                }
+            }
+        } catch (Exception ignored) {}
         return shortKey.replace('_', ' ');
     }
 

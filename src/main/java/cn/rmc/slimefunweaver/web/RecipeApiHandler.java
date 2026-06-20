@@ -961,11 +961,14 @@ public class RecipeApiHandler implements HttpHandler {
         }
         String shortKey = key.contains(":") ? key.substring(key.lastIndexOf(':') + 1) : key;
         switch (shortKey) {
+            // 喵~9格输入：工作台类 + 冶炼炉（配方数组固定9格，non-null数量可变）喵
             case "enhanced_crafting_table": case "armor_forge": case "magic_workbench":
-            case "ancient_altar": case "shaped": case "shapeless": case "null": return 9;
-            case "smeltery": case "heated_pressure_chamber": case "ore_crusher":
-            case "compressor": case "grind_stone": case "juicer": case "gold_pan":
-            case "freezer": case "food_fabricator": case "food_composter":
+            case "ancient_altar": case "shaped": case "shapeless": case "null":
+            case "smeltery": case "heated_pressure_chamber":
+                return 9;
+            // 喵~单格输入：单物品输入的机器喵
+            case "ore_crusher": case "compressor": case "grind_stone": case "juicer":
+            case "gold_pan": case "freezer": case "food_fabricator": case "food_composter":
             case "reactor": case "refinery": case "pressure_chamber": case "table_saw":
             case "ore_washer": case "oil_pump": case "geo_miner":
             case "miner_android": case "fisherman_android":

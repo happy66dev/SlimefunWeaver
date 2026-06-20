@@ -715,7 +715,11 @@ function doSelectItem(id) {
     return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
   });
   // addon配方只读展示在前，SCG可编辑配方追加在后喵~
-  recipesData = addonRecipes.concat(scgRecipes.length > 0 ? scgRecipes : []);
+  recipesData = addonRecipes.concat(scgRecipes);
+  // 喵~防御：两者都为空（无配方类型的物品），初始化一条空SCG配方供用户编辑喵
+  if (recipesData.length === 0) {
+    recipesData = [{type: '', input: [], output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false}];
+  }
 
   recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
   // 喵~防御：优先选中第一个SCG配方（isBuiltin=false）作为默认选中项
@@ -1029,6 +1033,10 @@ function revertItem() {
       return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
     });
     recipesData = addonRecipesRv.concat(scgRecipesRv);
+    // 喵~防御：两者都为空（无配方类型的物品），初始化一条空SCG配方供用户编辑喵
+    if (recipesData.length === 0) {
+      recipesData = [{type: '', input: [], output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false}];
+    }
     // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
     var firstScgIdxRv = 0;
     for (var rvi = 0; rvi < recipesData.length; rvi++) {

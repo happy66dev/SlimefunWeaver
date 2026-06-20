@@ -330,17 +330,20 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
-            // addonRecipes：始终输出 addon 注册的原始配方（只读），供前端展示喵
+            // addonRecipes：从原始快照读取，避免 applyAllRecipes 追加的 SCG 配方污染喵
             sb.append("\"addonRecipes\":[");
+            RecipeSnapshot snap = originalRecipes.get(id);
             boolean firstAddon = true;
-            if (rtKey != null && !isNullRecipeType(rtKey)) {
-                for (ItemStack stack : recipe) {
+            if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
+                String snapRtKey = snap.type.getKey().toString();
+                ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
+                for (ItemStack stack : snapRecipe) {
                     String stackId = itemIdFromStack(stack);
                     names.put(stackId, displayNameFromStack(stack, stackId));
                 }
-                sb.append(defaultRecipeJson(id, rtKey, recipe));
+                sb.append(defaultRecipeJson(id, snapRtKey, snapRecipe));
                 firstAddon = false;
-                for (RecipeEntry entry : item.getAdditionalRecipes()) {
+                for (RecipeEntry entry : snap.additionalRecipes) {
                     sb.append(',');
                     String entryRtKey = entry.getRecipeType().getKey().toString();
                     ItemStack[] entryRecipe = entry.getRecipe();

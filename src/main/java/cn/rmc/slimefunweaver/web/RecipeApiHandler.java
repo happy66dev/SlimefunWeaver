@@ -658,7 +658,13 @@ public class RecipeApiHandler implements HttpHandler {
             List<Map<?, ?>> recipes = parsed.recipes;
             if (recipes == null || recipes.isEmpty()) continue;
 
-            boolean isFirstRecipe = true;
+            // 喵~判断 addon 是否已有配方：原始快照的 RecipeType 不为 null 且不为 :null 结尾则视为有 addon 配方
+            RecipeSnapshot snapshot = originalRecipes.get(itemId);
+            boolean hasAddonRecipe = snapshot != null
+                    && snapshot.type != null
+                    && !isNullRecipeType(snapshot.type.getKey().toString());
+
+            boolean isFirstScgRecipe = true;
             for (Map<?, ?> recipeMap : recipes) {
                 String typeKey = String.valueOf(recipeMap.get("type"));
                 if (isNullRecipeType(typeKey)) continue;
@@ -683,15 +689,16 @@ public class RecipeApiHandler implements HttpHandler {
                 if (outputStack == null) outputStack = new ItemStack(Material.AIR);
                 outputStack.setAmount(outputAmount);
 
-                if (isFirstRecipe) {
+                // 喵~无 addon 配方时，第一条 SCG 配方用 setRecipe 全量注册，后续用 addRecipe
+                // 有 addon 配方时，始终用 addRecipe 追加，不覆盖 addon 主配方
+                ItemStack[] padded = new ItemStack[9];
+                System.arraycopy(inputStacks, 0, padded, 0, Math.min(inputStacks.length, 9));
+
+                if (!hasAddonRecipe && isFirstScgRecipe) {
                     item.setRecipeType(rt);
-                    // 喵~防御：setRecipe强制要求length=9，无论guessSlots返回多少都必须pad到9位
-                    // inputStacks可能是5格(MAGIC_WORKBENCH)、4格(ARMOR_FORGE)等非9格，补null填满
-                    ItemStack[] paddedFirst = new ItemStack[9];
-                    System.arraycopy(inputStacks, 0, paddedFirst, 0, Math.min(inputStacks.length, 9));
-                    item.setRecipe(paddedFirst);
+                    item.setRecipe(padded);
                     item.setRecipeOutput(outputStack);
-                    isFirstRecipe = false;
+                    isFirstScgRecipe = false;
 
                     int processingTime = toInt(recipeMap.get("processing-time"), 0);
                     if (processingTime > 0 && TIMED_RECIPE_TYPES.contains(typeKey)) {
@@ -704,10 +711,8 @@ public class RecipeApiHandler implements HttpHandler {
                         }
                     }
                 } else {
-                    // addRecipe 强制要求长度9，非首条配方需要pad到9喵
-                    ItemStack[] padded = new ItemStack[9];
-                    System.arraycopy(inputStacks, 0, padded, 0, Math.min(inputStacks.length, 9));
                     item.addRecipe(rt, padded, outputStack);
+                    isFirstScgRecipe = false;
                 }
 
                 rt.register(inputStacks, outputStack);
@@ -734,10 +739,10 @@ public class RecipeApiHandler implements HttpHandler {
 
     private static void rebuildMachineRecipesFromOriginals() {
         Map<MultiBlockMachine, List<ItemStack[]>> toRebuild = new LinkedHashMap<>();
-        ConfigurationSection root = storedRecipes != null ? storedRecipes.getConfigurationSection("slimefun") : null;
 
+        // 喵~所有物品都从原始快照重建 MultiBlockMachine 配方列表，不跳过 storedRecipes 里的物品
+        // 原来跳过 storedRecipes 物品的逻辑会导致 addon 主配方在 clearRecipe 后丢失喵
         for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
-            if (root != null && root.contains(entry.getKey())) continue;
             SlimefunItem item = IconParser.findSlimefunItem(entry.getKey());
             if (item == null || item.getRecipe() == null) continue;
             String machineId = getRecipeTypeMachineId(entry.getValue().type);

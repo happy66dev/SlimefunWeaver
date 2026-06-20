@@ -266,6 +266,7 @@ public class RecipeApiHandler implements HttpHandler {
         detectAddonRecipeTypes(resolved);
         Map<String, RecipeTypeInfo> map = new LinkedHashMap<>();
 
+        // 喵~EDITABLE_RECIPE_TYPES 里的都是 SF4 自带且可编辑的类型喵
         for (String key : EDITABLE_RECIPE_TYPES) {
             RecipeType rt = resolved.get(key);
             String name = readDisplayName(rt, key);
@@ -274,6 +275,8 @@ public class RecipeApiHandler implements HttpHandler {
                 TIMED_RECIPE_TYPES.contains(key), true, true));
         }
 
+        // 喵~遍历物品收集未在上方出现的配方类型；用 namespace 判断是否为 SF4 自带喵
+        // slimefun: 命名空间 = SF4 内置（isBuiltin=true），其余 = addon（isBuiltin=false）
         for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
             ItemStack[] recipe = item.getRecipe();
             if (recipe == null || recipe.length == 0) continue;
@@ -284,7 +287,9 @@ public class RecipeApiHandler implements HttpHandler {
 
             String name = readDisplayName(rt, key);
             int slots = guessSlots(key);
-            map.put(key, new RecipeTypeInfo(key, name, slots, guessCols(slots), false, false, false));
+            // 喵~namespace=slimefun 的是 SF4 内置类型（只是不可编辑），非 slimefun 的才是 addon 喵
+            boolean isSf4 = key.startsWith("slimefun:");
+            map.put(key, new RecipeTypeInfo(key, name, slots, guessCols(slots), false, isSf4, false));
         }
 
         return map;

@@ -622,10 +622,8 @@ function renderRecipeTabs() {
     var r = recipesData[i];
     var typeLabel = shortRecipeType(r.type);
     if (r.isBuiltin) {
-      // addon配方：灰显+锁图标，点击时弹提示，不进入编辑喵~
-      html += '<div class="rtab addon" title="由addon提供，不支持修改" onclick="showToast(\'由addon提供，不支持修改\',\'info\')">'
-        + '🔒 addon ' + (i+1) + ' <span style="font-size:9px;color:#484f58">' + typeLabel + '</span>'
-        + '</div>';
+      // addon/SF4只读配方：可点击切换查看，但锁图标提示不可编辑喵~
+      html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" style="opacity:0.7;border-style:dashed;" title="只读，不支持修改" onclick="selectRecipe(' + i + ')">🔒 ' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span></div>';
     } else {
       // SCG自管配方：正常可点击、可选中、可删除喵~
       html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" onclick="selectRecipe(' + i + ')">配方' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span>';

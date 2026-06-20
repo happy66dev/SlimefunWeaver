@@ -69,9 +69,8 @@ public class RecipeApiHandler implements HttpHandler {
         EDITABLE_RECIPE_TYPES.add("slimefun:refinery");
         EDITABLE_RECIPE_TYPES.add("slimefun:freezer");
         // 喵~以下三个原来漏掉了，均是 MultiBlock 机器，register() 走 mbm.addRecipe() 支持编辑喵
-        EDITABLE_RECIPE_TYPES.add("slimefun:gold_pan");
+        // 注意：gold_pan / ore_washer 输出随机，不加入可编辑列表喵
         EDITABLE_RECIPE_TYPES.add("slimefun:pressure_chamber");
-        EDITABLE_RECIPE_TYPES.add("slimefun:ore_washer");
     }
 
     private static final Map<String, Integer> ADDON_RECIPE_TYPE_SLOTS = new LinkedHashMap<>();

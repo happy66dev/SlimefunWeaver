@@ -716,10 +716,12 @@ function doSelectItem(id) {
   });
   // addon配方只读展示在前，SCG可编辑配方追加在后喵~
   recipesData = addonRecipes.concat(scgRecipes);
-  // 喵~无SCG配方时，用原始配方预填充一条SCG配方供编辑喵
-  // 如果原始 type 是可编辑类型，直接预填充 input/type，否则空白喵
+  // 喵~无SCG配方时，预填充一条SCG配方供编辑喵
+  // 只有 currentRecipeType 是可编辑类型时才预填充 input/type，否则置空让用户自选喵
   if (scgRecipes.length === 0) {
-    var defType = (!isNullRecipeType(d.currentRecipeType)) ? d.currentRecipeType : '';
+    var rtInfo = recipeTypes.find(function(t){return t.key === d.currentRecipeType;});
+    var typeIsEditable = rtInfo && rtInfo.isEditable;
+    var defType = typeIsEditable ? (d.currentRecipeType || '') : '';
     var defInput = defType ? (d.currentRecipe || []) : [];
     recipesData.push({type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
   }
@@ -1036,9 +1038,11 @@ function revertItem() {
       return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
     });
     recipesData = addonRecipesRv.concat(scgRecipesRv);
-    // 喵~无SCG配方时，用原始配方预填充一条SCG配方供编辑喵
+    // 喵~无SCG配方时，只有可编辑类型才预填充，否则置空让用户自选喵
     if (scgRecipesRv.length === 0) {
-      var defTypeRv = (!isNullRecipeType(d.currentRecipeType)) ? d.currentRecipeType : '';
+      var rtInfoRv = recipeTypes.find(function(t){return t.key === d.currentRecipeType;});
+      var typeIsEditableRv = rtInfoRv && rtInfoRv.isEditable;
+      var defTypeRv = typeIsEditableRv ? (d.currentRecipeType || '') : '';
       var defInputRv = defTypeRv ? (d.currentRecipe || []) : [];
       recipesData.push({type: defTypeRv, input: defInputRv, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
     }

@@ -337,7 +337,7 @@ public class RecipeApiHandler implements HttpHandler {
             // 可编辑类型的原始配方不在此处输出，由前端从 currentRecipeType/currentRecipe 预填充喵
             sb.append("\"addonRecipes\":[");
             RecipeSnapshot snap = originalRecipes.get(id);
-            boolean firstAddon = true;
+            List<String> addonJsonParts = new ArrayList<>();
             if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
                 String snapRtKey = snap.type.getKey().toString();
                 // 喵~主配方只在不可编辑类型时放入 addonRecipes（可编辑类型前端会预填充）喵
@@ -347,23 +347,21 @@ public class RecipeApiHandler implements HttpHandler {
                         String stackId = itemIdFromStack(stack);
                         names.put(stackId, displayNameFromStack(stack, stackId));
                     }
-                    sb.append(defaultRecipeJson(id, snapRtKey, snapRecipe));
-                    firstAddon = false;
+                    addonJsonParts.add(defaultRecipeJson(id, snapRtKey, snapRecipe));
                 }
                 // 喵~additionalRecipes 中，同样只放不可编辑类型的配方喵
                 for (RecipeEntry entry : snap.additionalRecipes) {
                     String entryRtKey = entry.getRecipeType().getKey().toString();
                     if (EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
-                    if (!firstAddon) sb.append(',');
-                    firstAddon = false;
                     ItemStack[] entryRecipe = entry.getRecipe();
                     for (ItemStack stack : entryRecipe) {
                         String stackId = itemIdFromStack(stack);
                         names.put(stackId, displayNameFromStack(stack, stackId));
                     }
-                    sb.append(defaultRecipeJson(id, entryRtKey, entryRecipe));
+                    addonJsonParts.add(defaultRecipeJson(id, entryRtKey, entryRecipe));
                 }
             }
+            sb.append(String.join(",", addonJsonParts));
             sb.append("],");
 
             // recipes：SCG 存储的可编辑配方（追加在 addon 配方之上）喵

@@ -523,6 +523,19 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function escKey(k) { return (k||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
 function isNullRecipeType(key) { return !key || key === 'null' || /:null$/i.test(key); }
 function shortRecipeType(key) { return isNullRecipeType(key) ? '无配方' : key.split(':').pop(); }
+
+// 喵~合并 addonRecipes + scgRecipes，无SCG时按可编辑性预填充一条空SCG配方喵
+function buildRecipesData(d, addonArr, scgArr) {
+  var data = addonArr.concat(scgArr);
+  if (scgArr.length === 0) {
+    var rtInfo = recipeTypes.find(function(t){return t.key === d.currentRecipeType;});
+    var editable = rtInfo && rtInfo.isEditable;
+    var defType = editable ? (d.currentRecipeType || '') : '';
+    var defInput = defType ? (d.currentRecipe || []) : [];
+    data.push({type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
+  }
+  return data;
+}
 // 判断当前选中的配方是否为addon提供的只读配方（isBuiltin=true），用于拦截所有编辑操作喵~
 function isCurrentRecipeReadonly() {
   if (recipeIndex < 0 || recipeIndex >= recipesData.length) return false;
@@ -622,8 +635,8 @@ function renderRecipeTabs() {
     var r = recipesData[i];
     var typeLabel = shortRecipeType(r.type);
     if (r.isBuiltin) {
-      // addon/SF4只读配方：可点击切换查看，但锁图标提示不可编辑喵~
-      html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" style="opacity:0.7;border-style:dashed;" title="只读，不支持修改" onclick="selectRecipe(' + i + ')">🔒 ' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span></div>';
+      // addon/SF4只读配方：可点击切换查看，选中时用黄色边框区分喵~
+      html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" style="opacity:0.75;border-style:dashed;' + (i === recipeIndex ? 'border-color:#d29922;color:#d29922;' : '') + '" title="只读，不支持修改" onclick="selectRecipe(' + i + ')">🔒 ' + (i+1) + ' <span style="font-size:9px;">' + typeLabel + '</span></div>';
     } else {
       // SCG自管配方：正常可点击、可选中、可删除喵~
       html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" onclick="selectRecipe(' + i + ')">配方' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span>';
@@ -715,16 +728,7 @@ function doSelectItem(id) {
     return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
   });
   // addon配方只读展示在前，SCG可编辑配方追加在后喵~
-  recipesData = addonRecipes.concat(scgRecipes);
-  // 喵~无SCG配方时，预填充一条SCG配方供编辑喵
-  // 只有 currentRecipeType 是可编辑类型时才预填充 input/type，否则置空让用户自选喵
-  if (scgRecipes.length === 0) {
-    var rtInfo = recipeTypes.find(function(t){return t.key === d.currentRecipeType;});
-    var typeIsEditable = rtInfo && rtInfo.isEditable;
-    var defType = typeIsEditable ? (d.currentRecipeType || '') : '';
-    var defInput = defType ? (d.currentRecipe || []) : [];
-    recipesData.push({type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
-  }
+  recipesData = buildRecipesData(d, addonRecipes, scgRecipes);
 
   recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
   // 喵~防御：优先选中第一个SCG配方（isBuiltin=false）作为默认选中项
@@ -1037,15 +1041,7 @@ function revertItem() {
     var scgRecipesRv = serverRecipes.map(function(r) {
       return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
     });
-    recipesData = addonRecipesRv.concat(scgRecipesRv);
-    // 喵~无SCG配方时，只有可编辑类型才预填充，否则置空让用户自选喵
-    if (scgRecipesRv.length === 0) {
-      var rtInfoRv = recipeTypes.find(function(t){return t.key === d.currentRecipeType;});
-      var typeIsEditableRv = rtInfoRv && rtInfoRv.isEditable;
-      var defTypeRv = typeIsEditableRv ? (d.currentRecipeType || '') : '';
-      var defInputRv = defTypeRv ? (d.currentRecipe || []) : [];
-      recipesData.push({type: defTypeRv, input: defInputRv, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
-    }
+    recipesData = buildRecipesData(d, addonRecipesRv, scgRecipesRv);
     // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
     var firstScgIdxRv = 0;
     for (var rvi = 0; rvi < recipesData.length; rvi++) {

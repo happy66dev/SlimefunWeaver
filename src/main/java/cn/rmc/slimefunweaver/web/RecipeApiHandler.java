@@ -325,6 +325,30 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
+            // addonRecipes：始终输出 addon 注册的原始配方（只读），供前端展示喵
+            sb.append("\"addonRecipes\":[");
+            boolean firstAddon = true;
+            if (rtKey != null && !isNullRecipeType(rtKey)) {
+                for (ItemStack stack : recipe) {
+                    String stackId = itemIdFromStack(stack);
+                    names.put(stackId, displayNameFromStack(stack, stackId));
+                }
+                sb.append(defaultRecipeJson(id, rtKey, recipe));
+                firstAddon = false;
+                for (RecipeEntry entry : item.getAdditionalRecipes()) {
+                    sb.append(',');
+                    String entryRtKey = entry.getRecipeType().getKey().toString();
+                    ItemStack[] entryRecipe = entry.getRecipe();
+                    for (ItemStack stack : entryRecipe) {
+                        String stackId = itemIdFromStack(stack);
+                        names.put(stackId, displayNameFromStack(stack, stackId));
+                    }
+                    sb.append(defaultRecipeJson(id, entryRtKey, entryRecipe));
+                }
+            }
+            sb.append("],");
+
+            // recipes：SCG 存储的可编辑配方（追加在 addon 配方之上）喵
             sb.append("\"recipes\":[");
             boolean hasStored = false;
             if (storedRecipes != null) {
@@ -338,25 +362,6 @@ public class RecipeApiHandler implements HttpHandler {
                         collectRecipeNames(names, r, id);
                         sb.append(recipeToJson(r, id));
                     }
-                }
-            }
-            if (!hasStored && rtKey != null && !isNullRecipeType(rtKey)) {
-                for (ItemStack stack : recipe) {
-                    String stackId = itemIdFromStack(stack);
-                    names.put(stackId, displayNameFromStack(stack, stackId));
-                }
-                sb.append(defaultRecipeJson(id, rtKey, recipe));
-
-                // Include additional recipes from SlimefunItem
-                for (RecipeEntry entry : item.getAdditionalRecipes()) {
-                    sb.append(',');
-                    String entryRtKey = entry.getRecipeType().getKey().toString();
-                    ItemStack[] entryRecipe = entry.getRecipe();
-                    for (ItemStack stack : entryRecipe) {
-                        String stackId = itemIdFromStack(stack);
-                        names.put(stackId, displayNameFromStack(stack, stackId));
-                    }
-                    sb.append(defaultRecipeJson(id, entryRtKey, entryRecipe));
                 }
             }
             sb.append(']');

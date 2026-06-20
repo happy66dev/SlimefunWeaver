@@ -710,26 +710,14 @@ function doSelectItem(id) {
   renderItemList($id('item-search').value);
 
   var serverRecipes = d.recipes || [];
-  // 喵~防御：只要配方列表非空就直接使用服务器数据，不依赖第一条type是否有值（否则第一条type为空时整个列表会退化为单配方）
-  if (serverRecipes && serverRecipes.length > 0) {
-    // 有storedRecipes说明是SCG自管的配方，标记isBuiltin=false喵~
-    recipesData = serverRecipes.map(function(r) {
-      return {
-        type: r.type || '',
-        input: r.input || [],
-        output: r.output || d.id,
-        outputAmount: r.outputAmount || 1,
-        processingTime: r.processingTime || 0,
-        isBuiltin: false  // 从Recipes.yml加载的都是SCG管理的配方，可编辑喵~
-      };
-    });
-  } else {
-    var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
-    var defInput = defType ? (d.currentRecipe||[]) : [];
-    // 没有storedRecipes时，无论defType是否为空，都是addon原生配方，标记isBuiltin=true（只读）喵~
-    // 修复：原来用!!defType会导致type为空的物品被错误标记为可编辑，现在统一为true喵~
-    recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: true}];
-  }
+  var addonRecipes = (d.addonRecipes || []).map(function(r) {
+    return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: true};
+  });
+  var scgRecipes = serverRecipes.map(function(r) {
+    return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
+  });
+  // addon配方只读展示在前，SCG可编辑配方追加在后喵~
+  recipesData = addonRecipes.concat(scgRecipes.length > 0 ? scgRecipes : []);
 
   recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
   // 喵~防御：优先选中第一个SCG配方（isBuiltin=false）作为默认选中项
@@ -1036,25 +1024,13 @@ function revertItem() {
   var d = itemData[selectedItemId];
   if (d) {
     var serverRecipes = d.recipes || [];
-    if (serverRecipes.length > 0 && !isNullRecipeType(serverRecipes[0].type)) {
-      // 有storedRecipes：SCG管理的配方，isBuiltin=false喵~
-      recipesData = serverRecipes.map(function(r) {
-        return {
-          type: r.type || '',
-          input: r.input || [],
-          output: r.output || d.id,
-          outputAmount: r.outputAmount || 1,
-          processingTime: r.processingTime || 0,
-          isBuiltin: false  // storedRecipes都是SCG自管的，可编辑喵~
-        };
-      });
-    } else {
-      var defType = isNullRecipeType(d.currentRecipeType) ? '' : (d.currentRecipeType || '');
-      var defInput = defType ? (d.currentRecipe||[]) : [];
-      // 没有storedRecipes：addon原生配方，统一标记isBuiltin=true（只读）喵~
-      // 修复：原来用!!defType会导致type为空的物品被错误标记为可编辑喵~
-      recipesData = [{type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: true}];
-    }
+    var addonRecipesRv = (d.addonRecipes || []).map(function(r) {
+      return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: true};
+    });
+    var scgRecipesRv = serverRecipes.map(function(r) {
+      return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
+    });
+    recipesData = addonRecipesRv.concat(scgRecipesRv);
     // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
     var firstScgIdxRv = 0;
     for (var rvi = 0; rvi < recipesData.length; rvi++) {

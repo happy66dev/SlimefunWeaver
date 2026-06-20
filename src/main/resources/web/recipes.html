@@ -716,9 +716,12 @@ function doSelectItem(id) {
   });
   // addon配方只读展示在前，SCG可编辑配方追加在后喵~
   recipesData = addonRecipes.concat(scgRecipes);
-  // 喵~防御：无SCG配方时（包括纯addon配方的物品），自动追加一条空SCG配方供编辑喵
+  // 喵~无SCG配方时，用原始配方预填充一条SCG配方供编辑喵
+  // 如果原始 type 是可编辑类型，直接预填充 input/type，否则空白喵
   if (scgRecipes.length === 0) {
-    recipesData.push({type: '', input: [], output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
+    var defType = (!isNullRecipeType(d.currentRecipeType)) ? d.currentRecipeType : '';
+    var defInput = defType ? (d.currentRecipe || []) : [];
+    recipesData.push({type: defType, input: defInput, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
   }
 
   recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
@@ -1033,9 +1036,11 @@ function revertItem() {
       return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: false};
     });
     recipesData = addonRecipesRv.concat(scgRecipesRv);
-    // 喵~防御：无SCG配方时（包括纯addon配方的物品），自动追加一条空SCG配方供编辑喵
+    // 喵~无SCG配方时，用原始配方预填充一条SCG配方供编辑喵
     if (scgRecipesRv.length === 0) {
-      recipesData.push({type: '', input: [], output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
+      var defTypeRv = (!isNullRecipeType(d.currentRecipeType)) ? d.currentRecipeType : '';
+      var defInputRv = defTypeRv ? (d.currentRecipe || []) : [];
+      recipesData.push({type: defTypeRv, input: defInputRv, output: d.id, outputAmount: 1, processingTime: 0, isBuiltin: false});
     }
     // 喵~防御：优先选中第一个SCG配方（isBuiltin=false），避免默认选中只读的addon配方
     var firstScgIdxRv = 0;

@@ -330,22 +330,29 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
-            // addonRecipes：从原始快照读取，避免 applyAllRecipes 追加的 SCG 配方污染喵
+            // addonRecipes：只输出 type 不在 EDITABLE_RECIPE_TYPES 里的只读配方喵
+            // 可编辑类型的原始配方不在此处输出，由前端从 currentRecipeType/currentRecipe 预填充喵
             sb.append("\"addonRecipes\":[");
             RecipeSnapshot snap = originalRecipes.get(id);
             boolean firstAddon = true;
             if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
                 String snapRtKey = snap.type.getKey().toString();
-                ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
-                for (ItemStack stack : snapRecipe) {
-                    String stackId = itemIdFromStack(stack);
-                    names.put(stackId, displayNameFromStack(stack, stackId));
+                // 喵~主配方只在不可编辑类型时放入 addonRecipes（可编辑类型前端会预填充）喵
+                if (!EDITABLE_RECIPE_TYPES.contains(snapRtKey)) {
+                    ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
+                    for (ItemStack stack : snapRecipe) {
+                        String stackId = itemIdFromStack(stack);
+                        names.put(stackId, displayNameFromStack(stack, stackId));
+                    }
+                    sb.append(defaultRecipeJson(id, snapRtKey, snapRecipe));
+                    firstAddon = false;
                 }
-                sb.append(defaultRecipeJson(id, snapRtKey, snapRecipe));
-                firstAddon = false;
+                // 喵~additionalRecipes 中，同样只放不可编辑类型的配方喵
                 for (RecipeEntry entry : snap.additionalRecipes) {
-                    sb.append(',');
                     String entryRtKey = entry.getRecipeType().getKey().toString();
+                    if (EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
+                    if (!firstAddon) sb.append(',');
+                    firstAddon = false;
                     ItemStack[] entryRecipe = entry.getRecipe();
                     for (ItemStack stack : entryRecipe) {
                         String stackId = itemIdFromStack(stack);

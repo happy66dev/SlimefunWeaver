@@ -656,6 +656,11 @@ public class RecipeApiHandler implements HttpHandler {
 
         Map<String, RecipeType> resolved = collectRuntimeRecipeTypes(resolveBuiltinTypes());
 
+        // 喵~收集本次 apply 中所有需要从机器里踢掉的物品：mbm -> Set<itemId>
+        // 不在循环内立即 rebuildMachineExcluding，避免多个物品共用同一台机器时
+        // 后一次重建把前一次排除的物品配方重新加回来的问题喵
+        Map<MultiBlockMachine, Set<String>> mbmExcludes = new LinkedHashMap<>();
+
         for (String itemId : root.getKeys(false)) {
             SlimefunItem item = IconParser.findSlimefunItem(itemId);
             if (item == null) continue;
@@ -683,17 +688,13 @@ public class RecipeApiHandler implements HttpHandler {
                     item.setRecipeType(RecipeType.NULL);
                     item.setRecipe(new ItemStack[9]);
                     item.setRecipeOutput(new ItemStack(Material.AIR));
-                    // 喵~若原始配方类型对应 MultiBlockMachine（如冶炼炉），需要从机器的配方列表中
-                    // 清除该物品的配方，否则机器列表在 restoreOriginalRecipes 阶段已被恢复，
-                    // 物品字段设为 NULL 但机器仍可合成该物品喵
+                    // 喵~若原始配方类型对应 MultiBlockMachine，记录到 mbmExcludes，
+                    // 循环结束后统一重建，避免多物品共用同机器时互相覆盖喵
                     String machineId = getRecipeTypeMachineId(snapshot.type);
                     if (machineId != null) {
                         SlimefunItem mItem = SlimefunItem.getById(machineId);
                         if (mItem instanceof MultiBlockMachine) {
-                            MultiBlockMachine mbm = (MultiBlockMachine) mItem;
-                            // 喵~重新从快照构建机器配方，但排除当前这个 itemId 的输出
-                            // 通过重建整个机器的配方列表来实现：先 clear 再逐条从快照 add，跳过当前物品
-                            rebuildMachineExcluding(mbm, itemId);
+                            mbmExcludes.computeIfAbsent((MultiBlockMachine) mItem, k -> new LinkedHashSet<>()).add(itemId);
                         }
                     }
                 }
@@ -754,6 +755,12 @@ public class RecipeApiHandler implements HttpHandler {
 
                 rt.register(inputStacks, outputStack);
             }
+        }
+
+        // 喵~循环结束后统一处理需要踢掉配方的机器，每台机器只重建一次，
+        // 确保同批次删除多个共用同一台机器的物品时所有排除项都生效喵
+        for (Map.Entry<MultiBlockMachine, Set<String>> entry : mbmExcludes.entrySet()) {
+            rebuildMachineExcluding(entry.getKey(), entry.getValue());
         }
 
         plugin.getLogger().info("Recipes applied in real-time");
@@ -823,16 +830,15 @@ public class RecipeApiHandler implements HttpHandler {
     }
 
     /**
-     * 喵~重建指定 MultiBlockMachine 的配方列表，但排除 excludeItemId 对应的配方
-     * 用于"用户删除某物品的 SF 原版配方"场景：机器在 restoreOriginalRecipes 时已恢复，
-     * 此处需要把刚恢复的那条配方从机器列表再踢掉喵
+     * 喵~重建指定 MultiBlockMachine 的配方列表，但排除 excludeItemIds 集合内所有物品的配方
+     * 用于"用户批量删除 SF 原版配方"场景：机器在 restoreOriginalRecipes 时已恢复，
+     * 此处需要把恢复的那些配方从机器列表再踢掉；接受 Set 以支持同批次多物品喵
      */
-    private static void rebuildMachineExcluding(MultiBlockMachine mbm, String excludeItemId) {
-        // 喵~防御：excludeItemId 为空则不排除任何配方，与普通重建等效
+    private static void rebuildMachineExcluding(MultiBlockMachine mbm, Set<String> excludeItemIds) {
         List<ItemStack[]> toAdd = new ArrayList<>();
         for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
-            // 喵~跳过要删除的物品
-            if (entry.getKey().equals(excludeItemId)) continue;
+            // 喵~跳过所有要排除的物品
+            if (excludeItemIds.contains(entry.getKey())) continue;
             RecipeSnapshot snap = entry.getValue();
             // 喵~主配方
             String machineId = getRecipeTypeMachineId(snap.type);

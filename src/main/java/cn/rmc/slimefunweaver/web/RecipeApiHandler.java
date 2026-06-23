@@ -116,14 +116,156 @@ public class RecipeApiHandler implements HttpHandler {
         RecipeApiHandler.plugin = plugin;
         captureOriginalRecipes();
         File file = new File(plugin.getDataFolder(), "Recipes.yml");
-        if (!file.exists()) return;
+        if (!file.exists()) {
+            // 喵~Recipes.yml 不存在时，自动将所有 EDITABLE 物品的原始配方导入并写入文件
+            // 这样 SCG 从一开始就接管这些配方的管理，后续所有修改都在此基础上进行
+            autoImportEditableRecipes(plugin, file);
+            return;
+        }
         try {
             storedRecipes = YamlConfiguration.loadConfiguration(file);
+            // 喵~清理 Recipes.yml 里非 EDITABLE 物品的条目，保持文件干净喵
+            pruneNonEditableEntries(file);
             applyAllRecipes();
             plugin.getLogger().info("Loaded Recipes.yml with stored customizations");
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to load Recipes.yml on startup", e);
         }
+    }
+
+    /**
+     * 喵~Recipes.yml 不存在时自动导入：将所有 EDITABLE 物品的当前原始配方写入文件
+     * 这样 SCG 从启动起就接管这些物品的配方，后续通过编辑器修改的内容都保存在此文件里
+     */
+    private static void autoImportEditableRecipes(SlimefunWeaver plugin, File file) {
+        try {
+            YamlConfiguration yaml = new YamlConfiguration();
+            ConfigurationSection root = yaml.createSection("slimefun");
+            int count = 0;
+            for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
+                String itemId = entry.getKey();
+                RecipeSnapshot snap = entry.getValue();
+                // 喵~只导入 EDITABLE 类型的物品（包括 RecipeType.NULL 的物品）
+                if (!isSnapshotEditable(snap)) continue;
+                // 喵~RecipeType.NULL 或无配方的物品：写入空 recipes 列表，表示 SCG 接管但暂无配方
+                if (snap.type == null || isNullRecipeType(snap.type.getKey().toString()) || snap.recipe == null) {
+                    ConfigurationSection sec = root.createSection(itemId);
+                    sec.set("recipes", new ArrayList<>());
+                    count++;
+                    continue;
+                }
+                List<Map<String, Object>> recipeList = new ArrayList<>();
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("type", snap.type.getKey().toString());
+                List<String> inputIds = new ArrayList<>();
+                int slots = guessSlots(snap.type.getKey().toString());
+                for (int i = 0; i < Math.min(snap.recipe.length, slots); i++) {
+                    inputIds.add(snap.recipe[i] == null ? "AIR" : staticItemIdFromStack(snap.recipe[i]));
+                }
+                // 喵~不足 slots 位的补 AIR
+                while (inputIds.size() < slots) inputIds.add("AIR");
+                map.put("input", inputIds);
+                SlimefunItem sfItem = IconParser.findSlimefunItem(itemId);
+                map.put("output", itemId);
+                map.put("output-amount", snap.output != null ? clamp(snap.output.getAmount(), 1, 64) : 1);
+                if (snap.processingTime > 0 && TIMED_RECIPE_TYPES.contains(snap.type.getKey().toString())) {
+                    map.put("processing-time", snap.processingTime);
+                }
+                recipeList.add(map);
+                // 喵~additionalRecipes 中属于 EDITABLE 类型的也一并导入
+                for (RecipeEntry addEntry : snap.additionalRecipes) {
+                    if (addEntry.getRecipeType() == null) continue;
+                    String addKey = addEntry.getRecipeType().getKey().toString();
+                    if (!EDITABLE_RECIPE_TYPES.contains(addKey)) continue;
+                    Map<String, Object> addMap = new LinkedHashMap<>();
+                    addMap.put("type", addKey);
+                    List<String> addInputIds = new ArrayList<>();
+                    int addSlots = guessSlots(addKey);
+                    ItemStack[] addRecipe = addEntry.getRecipe();
+                    for (int i = 0; i < Math.min(addRecipe != null ? addRecipe.length : 0, addSlots); i++) {
+                        addInputIds.add(addRecipe[i] == null ? "AIR" : staticItemIdFromStack(addRecipe[i]));
+                    }
+                    while (addInputIds.size() < addSlots) addInputIds.add("AIR");
+                    addMap.put("input", addInputIds);
+                    addMap.put("output", itemId);
+                    ItemStack addOut = addEntry.getRecipeOutput();
+                    addMap.put("output-amount", addOut != null ? clamp(addOut.getAmount(), 1, 64) : 1);
+                    recipeList.add(addMap);
+                }
+                ConfigurationSection sec = root.createSection(itemId);
+                sec.set("recipes", recipeList);
+                count++;
+            }
+            // 喵~原子写入文件，确保文件完整喵
+            File tmp = new File(plugin.getDataFolder(), "Recipes.yml.tmp." + System.currentTimeMillis());
+            try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) {
+                w.write(yaml.saveToString());
+            }
+            java.nio.file.Files.move(tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            storedRecipes = yaml;
+            plugin.getLogger().info("Auto-imported " + count + " editable items into Recipes.yml");
+            // 喵~导入后不需要 applyAllRecipes，因为原始配方本身已经在游戏里生效了
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to auto-import editable recipes", e);
+        }
+    }
+
+    /**
+     * 喵~清理 Recipes.yml 里非 EDITABLE 物品的条目（如老版本误写入的 addon 物品）
+     * 下次保存时自动生效喵
+     */
+    private static void pruneNonEditableEntries(File file) {
+        if (storedRecipes == null) return;
+        ConfigurationSection root = storedRecipes.getConfigurationSection("slimefun");
+        if (root == null) return;
+        boolean changed = false;
+        for (String itemId : new ArrayList<>(root.getKeys(false))) {
+            RecipeSnapshot snap = originalRecipes.get(itemId);
+            if (!isSnapshotEditable(snap)) {
+                root.set(itemId, null);
+                changed = true;
+                plugin.getLogger().info("Pruned non-editable item from Recipes.yml: " + itemId);
+            }
+        }
+        if (!changed) return;
+        try {
+            File tmp = new File(plugin.getDataFolder(), "Recipes.yml.tmp." + System.currentTimeMillis());
+            try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) {
+                w.write(storedRecipes.saveToString());
+            }
+            java.nio.file.Files.move(tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to prune Recipes.yml", e);
+        }
+    }
+
+    /**
+     * 喵~判断某物品快照的原始主配方是否属于 SCG 可接管的 EDITABLE 类型
+     * null/RecipeType.NULL 也算可编辑（用户可以为它设置配方）喵
+     */
+    private static boolean isSnapshotEditable(RecipeSnapshot snap) {
+        if (snap == null) return false;
+        if (snap.type == null || isNullRecipeType(snap.type.getKey().toString())) return true;
+        return EDITABLE_RECIPE_TYPES.contains(snap.type.getKey().toString());
+    }
+
+    /**
+     * 喵~static 版本的 itemIdFromStack，供 autoImport 在无实例上下文时使用
+     */
+    private static String staticItemIdFromStack(ItemStack stack) {
+        if (stack == null || stack.getType() == Material.AIR) return "AIR";
+        SlimefunItem sfItem = SlimefunItem.getByItem(stack);
+        if (sfItem != null) return sfItem.getId();
+        for (SlimefunItem candidate : Slimefun.getRegistry().getEnabledSlimefunItems()) {
+            if (io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils.isItemSimilar(stack, candidate.getItem(), false, false)) {
+                return candidate.getId();
+            }
+        }
+        return stack.getType().name();
     }
 
     @Override
@@ -305,11 +447,16 @@ public class RecipeApiHandler implements HttpHandler {
 
             if (!firstItem) sb.append(','); firstItem = false;
 
+            RecipeSnapshot snap = originalRecipes.get(id);
+            // 喵~根据原始快照判断该物品是否可由 SCG 接管编辑
+            boolean editable = isSnapshotEditable(snap);
+
             sb.append('"').append(escapeJson(id)).append("\":{");
             appendString(sb, "id", id);
             sb.append(',');
             appendString(sb, "name", item.getItemName());
             sb.append(',');
+            sb.append("\"isEditable\":").append(editable).append(',');
 
             String rtKey = item.getRecipeType() != null ? item.getRecipeType().getKey().toString() : null;
             sb.append("\"currentRecipeType\":");
@@ -325,13 +472,15 @@ public class RecipeApiHandler implements HttpHandler {
             }
             sb.append("],");
 
-            // addonRecipes：只输出不可编辑类型的只读配方；可编辑类型由前端从currentRecipe预填充喵
+            // 喵~addonRecipes：
+            // EDITABLE 物品：只输出不可编辑类型的只读配方（可编辑类型由前端从 SCG recipes 读取）
+            // 非 EDITABLE 物品：输出所有原始配方作为只读展示
             sb.append("\"addonRecipes\":[");
-            RecipeSnapshot snap = originalRecipes.get(id);
             List<String> addonJsonParts = new ArrayList<>();
             if (snap != null && snap.type != null && !isNullRecipeType(snap.type.getKey().toString())) {
                 String snapRtKey = snap.type.getKey().toString();
-                if (!EDITABLE_RECIPE_TYPES.contains(snapRtKey)) {
+                if (!editable || !EDITABLE_RECIPE_TYPES.contains(snapRtKey)) {
+                    // 喵~非 EDITABLE 物品的主配方，或 EDITABLE 物品里属于非可编辑类型的主配方：显示为只读
                     ItemStack[] snapRecipe = snap.recipe != null ? snap.recipe : new ItemStack[0];
                     for (ItemStack stack : snapRecipe) {
                         String stackId = itemIdFromStack(stack);
@@ -341,7 +490,8 @@ public class RecipeApiHandler implements HttpHandler {
                 }
                 for (RecipeEntry entry : snap.additionalRecipes) {
                     String entryRtKey = entry.getRecipeType().getKey().toString();
-                    if (EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
+                    // 喵~EDITABLE 物品跳过 EDITABLE 类型的 additionalRecipes（由 SCG recipes 管理）
+                    if (editable && EDITABLE_RECIPE_TYPES.contains(entryRtKey)) continue;
                     ItemStack[] entryRecipe = entry.getRecipe();
                     for (ItemStack stack : entryRecipe) {
                         String stackId = itemIdFromStack(stack);
@@ -353,10 +503,10 @@ public class RecipeApiHandler implements HttpHandler {
             sb.append(String.join(",", addonJsonParts));
             sb.append("],");
 
-            // recipes：SCG 存储的可编辑配方（追加在 addon 配方之上）喵
+            // 喵~recipes：只有 EDITABLE 物品才输出 SCG 配方；非 EDITABLE 强制为空数组
             sb.append("\"recipes\":[");
             boolean hasStored = false;
-            if (storedRecipes != null) {
+            if (editable && storedRecipes != null) {
                 StoredRecipesSection parsed = parseRecipes(storedRecipes, id);
                 List<Map<?, ?>> recipes = parsed.recipes;
                 if (recipes != null) {
@@ -519,10 +669,25 @@ public class RecipeApiHandler implements HttpHandler {
             return false;
         }
         for (Map.Entry<String, List<Map<String, Object>>> entry : parsed.entrySet()) {
-            root.set(entry.getKey(), null);
+            String itemId = entry.getKey();
+            // 喵~防御：非 EDITABLE 物品不允许写入，静默跳过保护 Recipes.yml 干净喵
+            RecipeSnapshot snap = originalRecipes.get(itemId);
+            if (!isSnapshotEditable(snap)) {
+                plugin.getLogger().warning("Ignored save attempt for non-editable item: " + itemId);
+                continue;
+            }
+            root.set(itemId, null);
             if (entry.getValue().isEmpty()) continue;
-            ConfigurationSection itemSec = root.createSection(entry.getKey());
+            ConfigurationSection itemSec = root.createSection(itemId);
             itemSec.set("recipes", entry.getValue());
+        }
+        // 喵~顺便清理 root 里可能残留的非 EDITABLE 条目（兼容旧文件）
+        for (String existingId : new ArrayList<>(root.getKeys(false))) {
+            if (parsed.containsKey(existingId)) continue; // 已经在上面处理过的跳过喵
+            RecipeSnapshot snap = originalRecipes.get(existingId);
+            if (!isSnapshotEditable(snap)) {
+                root.set(existingId, null);
+            }
         }
 
         File tempFile = new File(plugin.getDataFolder(), "Recipes.yml.tmp." + System.currentTimeMillis());

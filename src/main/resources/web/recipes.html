@@ -660,7 +660,7 @@ function loadAll() {
     dlog('INIT', 'loaded ' + Object.keys(itemData).length + ' items, ' + recipeTypes.length + ' recipe types');
     allItems = [];
     Object.keys(itemData).forEach(function(k){
-      allItems.push({id:k, name:itemData[k].name||k, rt:itemData[k].currentRecipeType||''});
+      allItems.push({id:k, name:itemData[k].name||k, rt:itemData[k].currentRecipeType||'', editable:itemData[k].isEditable !== false});
     });
     allItems.sort(function(a,b){return MC.strip(a.name).localeCompare(MC.strip(b.name))});
     renderItemList('');
@@ -677,8 +677,10 @@ function renderItemList(filter) {
     if (q && it.id.toLowerCase().indexOf(q)<0 && stripName.indexOf(q)<0) return;
     var rtShort = shortRecipeType(it.rt);
     var rtClass = isNullRecipeType(it.rt) ? 'rtag none' : 'rtag';
+    // 喵~非 EDITABLE 物品在名字前加 🔒 标识，右侧面板不可用喵
+    var lockIcon = it.editable ? '' : '<span style="color:#484f58;font-size:10px;margin-right:3px;">🔒</span>';
     h+='<div class="item-row'+(selectedItemId===it.id?' active':'')+'" data-id="'+it.id+'" onclick="selectItem(\''+escKey(it.id)+'\')">'
-      +'<span class="iname">'+MC.parseToHtml(it.name)+'</span><span class="'+rtClass+'">'+esc(rtShort)+'</span></div>';
+      +'<span class="iname">'+lockIcon+MC.parseToHtml(it.name)+'</span><span class="'+rtClass+'">'+esc(rtShort)+'</span></div>';
   });
   $id('item-list').innerHTML = h || '<div style="padding:12px;color:#484f58;text-align:center;">无匹配</div>';
 }
@@ -720,8 +722,48 @@ function doSelectItem(id) {
     return;
   }
   originalItemName = d.name || '';
-  dlog('SELECT', 'item name=' + MC.strip(d.name) + ' rt=' + (d.currentRecipeType||'null') + ' recipes.length=' + (d.recipes ? d.recipes.length : 0));
   renderItemList($id('item-search').value);
+
+  // 喵~非 EDITABLE 物品：显示只读提示，右侧面板完全隐藏，不允许任何编辑操作喵
+  if (d.isEditable === false) {
+    $id('right-panel').style.display = 'none';
+    $id('center-empty').style.display = 'none';
+    $id('center-panel').style.display = '';
+    var addonReadonlyRecipes = (d.addonRecipes || []).map(function(r) {
+      return {type: r.type||'', input: r.input||[], output: r.output||d.id, outputAmount: r.outputAmount||1, processingTime: r.processingTime||0, isBuiltin: true};
+    });
+    // 喵~构建只读的配方展示 HTML，不走正常 renderGrid 流程
+    var rtShort = addonReadonlyRecipes.length > 0 ? shortRecipeType(addonReadonlyRecipes[0].type) : '未知';
+    var lockHtml = '<div style="padding:16px 20px;">';
+    lockHtml += '<div style="text-align:center;padding:12px 14px;color:#d29922;background:#1a1600;border:1px solid #3b2f00;border-radius:6px;margin-bottom:14px;font-size:12px;">🔒 该物品使用了 SCG 不支持编辑的合成方式，仅供查看，不可修改</div>';
+    if (addonReadonlyRecipes.length === 0) {
+      lockHtml += '<div style="text-align:center;color:#484f58;font-size:11px;">暂无原始配方信息</div>';
+    } else {
+      // 喵~展示每个只读配方的简单信息
+      addonReadonlyRecipes.forEach(function(r, i) {
+        var info = getTypeInfo(r.type);
+        var inputSlots = r.input || [];
+        lockHtml += '<div style="margin-bottom:14px;">';
+        lockHtml += '<div style="font-size:10px;color:#8b949e;margin-bottom:6px;">#'+(i+1)+' '+esc(r.type)+'</div>';
+        lockHtml += '<div class="recipe-grid" style="grid-template-columns:repeat('+info.cols+', 56px);display:inline-grid;">';
+        for (var si = 0; si < info.slots; si++) {
+          var sId = inputSlots[si] || 'AIR';
+          var cl = sId !== 'AIR' ? 'slot filled' : 'slot';
+          lockHtml += '<div class="'+cl+'" style="pointer-events:none;">'+(sId !== 'AIR' ? resolveDisplayName(sId) : '<span style="font-size:18px;color:#484f58;">+</span>')+'</div>';
+        }
+        lockHtml += '</div>';
+        lockHtml += '<div class="arrow-dn">↓</div>';
+        lockHtml += '<div class="oslot">'+resolveDisplayName(r.output)+'<span>×'+r.outputAmount+'</span></div>';
+        lockHtml += '</div>';
+      });
+    }
+    lockHtml += '</div>';
+    $id('center-panel').innerHTML = lockHtml;
+    dlog('SELECT', 'non-editable item: ' + id + ', showing readonly view');
+    return;
+  }
+
+  dlog('SELECT', 'item name=' + MC.strip(d.name) + ' rt=' + (d.currentRecipeType||'null') + ' recipes.length=' + (d.recipes ? d.recipes.length : 0));
 
   var serverRecipes = d.recipes || [];
   var addonRecipes = (d.addonRecipes || []).map(function(r) {
@@ -733,9 +775,7 @@ function doSelectItem(id) {
   // addon配方只读展示在前，SCG可编辑配方追加在后喵~
   recipesData = buildRecipesData(d, addonRecipes, scgRecipes);
 
-  recipeIndex = 0; // 先重置，下方会被firstScgIdx覆盖喵~
-  // 喵~防御：优先选中第一个SCG配方（isBuiltin=false）作为默认选中项
-  // 如果全是addon配方，则fallback到第一个（只读展示）
+  recipeIndex = 0;
   var firstScgIdx = 0;
   for (var ri = 0; ri < recipesData.length; ri++) {
     if (!recipesData[ri].isBuiltin) { firstScgIdx = ri; break; }

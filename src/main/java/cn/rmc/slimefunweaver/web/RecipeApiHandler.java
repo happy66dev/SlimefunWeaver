@@ -662,13 +662,31 @@ public class RecipeApiHandler implements HttpHandler {
 
             StoredRecipesSection parsed = parseRecipes(storedRecipes, itemId);
             List<Map<?, ?>> recipes = parsed.recipes;
-            if (recipes == null || recipes.isEmpty()) continue;
+            // 喵~null 表示该物品在 Recipes.yml 里没有 recipes 键，无需处理；空列表=用户主动删除全部 SCG 配方
+            if (recipes == null) continue;
 
-            // 喵~判断 addon 是否已有配方：原始快照的 RecipeType 不为 null 且不为 :null 结尾则视为有 addon 配方
             RecipeSnapshot snapshot = originalRecipes.get(itemId);
-            boolean hasAddonRecipe = snapshot != null
+
+            // 喵~判断原始主配方是否是 SCG 可编辑的 SF 原版类型（在 EDITABLE_RECIPE_TYPES 内）
+            // 只有 SF 原版类型的主配方才允许 SCG 用 setRecipe 覆盖或设为 NULL（删除）
+            // addon 提供的主配方（不在 EDITABLE 列表）不可触碰，SCG 只能 addRecipe 追加
+            boolean originalMainIsEditable = snapshot != null
                     && snapshot.type != null
-                    && !isNullRecipeType(snapshot.type.getKey().toString());
+                    && !isNullRecipeType(snapshot.type.getKey().toString())
+                    && EDITABLE_RECIPE_TYPES.contains(snapshot.type.getKey().toString());
+
+            // 喵~SCG 配方列表为空 = 用户删除了所有 SCG 配方
+            // 若原始主配方是可编辑的 SF 类型，则同时将主配方设为 NULL（删除原版 SF 配方）
+            // 若原始主配方是 addon 类型，什么也不做（restoreOriginalRecipes 已恢复 addon 配方）
+            if (recipes.isEmpty()) {
+                if (originalMainIsEditable) {
+                    item.setRecipeType(RecipeType.NULL);
+                    ItemStack[] empty = new ItemStack[9];
+                    item.setRecipe(empty);
+                    item.setRecipeOutput(new ItemStack(Material.AIR));
+                }
+                continue;
+            }
 
             boolean isFirstScgRecipe = true;
             for (Map<?, ?> recipeMap : recipes) {
@@ -695,12 +713,12 @@ public class RecipeApiHandler implements HttpHandler {
                 if (outputStack == null) outputStack = new ItemStack(Material.AIR);
                 outputStack.setAmount(outputAmount);
 
-                // 喵~无 addon 配方时，第一条 SCG 配方用 setRecipe 全量注册，后续用 addRecipe
-                // 有 addon 配方时，始终用 addRecipe 追加，不覆盖 addon 主配方
+                // 喵~原始主配方是 SF 可编辑类型时：第一条 SCG 配方用 setRecipe 覆盖原版配方，后续追加
+                // 原始主配方是 addon 类型（不可编辑）时：所有 SCG 配方均用 addRecipe 追加，不动 addon 主配方
                 ItemStack[] padded = new ItemStack[9];
                 System.arraycopy(inputStacks, 0, padded, 0, Math.min(inputStacks.length, 9));
 
-                if (!hasAddonRecipe && isFirstScgRecipe) {
+                if (originalMainIsEditable && isFirstScgRecipe) {
                     item.setRecipeType(rt);
                     item.setRecipe(padded);
                     item.setRecipeOutput(outputStack);
@@ -717,6 +735,7 @@ public class RecipeApiHandler implements HttpHandler {
                         }
                     }
                 } else {
+                    // 喵~addon 主配方物品 或 第2条以上的 SCG 配方：均追加
                     item.addRecipe(rt, padded, outputStack);
                     isFirstScgRecipe = false;
                 }

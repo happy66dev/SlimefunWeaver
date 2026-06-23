@@ -612,13 +612,19 @@ function deleteRecipe(idx) {
     showToast('addon配方不可删除','error');
     return;
   }
-  // 喵~防御：过滤掉isBuiltin=true的配方，统计实际可删除的SCG配方数量
-  // 若SCG配方只剩1条，不允许删除（至少保留一条SCG配方供编辑）
-  var scgCount = recipesData.filter(function(r){return !r.isBuiltin;}).length;
-  if (scgCount <= 1) { showToast('至少保留一个SCG配方','info'); return; }
   saveCurrentRecipeState();
   recipesData.splice(idx, 1);
-  if (recipeIndex >= recipesData.length) recipeIndex = recipesData.length - 1;
+  // 喵~删除后若无SCG配方剩余，补一条空SCG配方占位（type为空=保存时后端会清除所有SCG配方）
+  var scgRemaining = recipesData.filter(function(r){return !r.isBuiltin;});
+  if (scgRemaining.length === 0) {
+    recipesData.push({type: '', input: [], output: selectedItemId, outputAmount: 1, processingTime: 0, isBuiltin: false});
+  }
+  // 喵~切换到第一个SCG配方（isBuiltin=false）
+  var nextIdx = 0;
+  for (var ni = 0; ni < recipesData.length; ni++) {
+    if (!recipesData[ni].isBuiltin) { nextIdx = ni; break; }
+  }
+  recipeIndex = nextIdx;
   loadRecipeState(recipeIndex);
   setDirty(true);
   renderTypeList();
@@ -629,8 +635,6 @@ function deleteRecipe(idx) {
 
 function renderRecipeTabs() {
   var html = '';
-  // 统计SCG配方数量，用于判断是否显示删除按钮喵~
-  var scgCount = recipesData.filter(function(r){return !r.isBuiltin;}).length;
   for (var i = 0; i < recipesData.length; i++) {
     var r = recipesData[i];
     var typeLabel = shortRecipeType(r.type);
@@ -638,10 +642,9 @@ function renderRecipeTabs() {
       // addon/SF4只读配方：可点击切换查看，选中时用黄色边框区分喵~
       html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" style="opacity:0.75;border-style:dashed;' + (i === recipeIndex ? 'border-color:#d29922;color:#d29922;' : '') + '" title="只读，不支持修改" onclick="selectRecipe(' + i + ')">🔒 ' + (i+1) + ' <span style="font-size:9px;">' + typeLabel + '</span></div>';
     } else {
-      // SCG自管配方：正常可点击、可选中、可删除喵~
+      // SCG自管配方：正常可点击、可选中、可删除（包括最后一条，删除后补空占位配方喵~）
       html += '<div class="rtab' + (i === recipeIndex ? ' active' : '') + '" onclick="selectRecipe(' + i + ')">配方' + (i+1) + ' <span style="font-size:9px;color:#8b949e">' + typeLabel + '</span>';
-      // 只有SCG配方数量>1时才显示删除按钮，确保至少保留一条喵~
-      if (scgCount > 1) html += '<span class="rtab-del" onclick="event.stopPropagation();deleteRecipe(' + i + ')">✕</span>';
+      html += '<span class="rtab-del" onclick="event.stopPropagation();deleteRecipe(' + i + ')">✕</span>';
       html += '</div>';
     }
   }

@@ -681,9 +681,21 @@ public class RecipeApiHandler implements HttpHandler {
             if (recipes.isEmpty()) {
                 if (originalMainIsEditable) {
                     item.setRecipeType(RecipeType.NULL);
-                    ItemStack[] empty = new ItemStack[9];
-                    item.setRecipe(empty);
+                    item.setRecipe(new ItemStack[9]);
                     item.setRecipeOutput(new ItemStack(Material.AIR));
+                    // 喵~若原始配方类型对应 MultiBlockMachine（如冶炼炉），需要从机器的配方列表中
+                    // 清除该物品的配方，否则机器列表在 restoreOriginalRecipes 阶段已被恢复，
+                    // 物品字段设为 NULL 但机器仍可合成该物品喵
+                    String machineId = getRecipeTypeMachineId(snapshot.type);
+                    if (machineId != null) {
+                        SlimefunItem mItem = SlimefunItem.getById(machineId);
+                        if (mItem instanceof MultiBlockMachine) {
+                            MultiBlockMachine mbm = (MultiBlockMachine) mItem;
+                            // 喵~重新从快照构建机器配方，但排除当前这个 itemId 的输出
+                            // 通过重建整个机器的配方列表来实现：先 clear 再逐条从快照 add，跳过当前物品
+                            rebuildMachineExcluding(mbm, itemId);
+                        }
+                    }
                 }
                 continue;
             }
@@ -807,6 +819,40 @@ public class RecipeApiHandler implements HttpHandler {
             for (int i = 0; i < recs.size(); i += 2) {
                 entry.getKey().addRecipe(recs.get(i), recs.get(i + 1)[0]);
             }
+        }
+    }
+
+    /**
+     * 喵~重建指定 MultiBlockMachine 的配方列表，但排除 excludeItemId 对应的配方
+     * 用于"用户删除某物品的 SF 原版配方"场景：机器在 restoreOriginalRecipes 时已恢复，
+     * 此处需要把刚恢复的那条配方从机器列表再踢掉喵
+     */
+    private static void rebuildMachineExcluding(MultiBlockMachine mbm, String excludeItemId) {
+        // 喵~防御：excludeItemId 为空则不排除任何配方，与普通重建等效
+        List<ItemStack[]> toAdd = new ArrayList<>();
+        for (Map.Entry<String, RecipeSnapshot> entry : originalRecipes.entrySet()) {
+            // 喵~跳过要删除的物品
+            if (entry.getKey().equals(excludeItemId)) continue;
+            RecipeSnapshot snap = entry.getValue();
+            // 喵~主配方
+            String machineId = getRecipeTypeMachineId(snap.type);
+            if (machineId != null && machineId.equals(mbm.getId()) && snap.recipe != null && snap.output != null) {
+                toAdd.add(snap.recipe);
+                toAdd.add(new ItemStack[]{snap.output});
+            }
+            // 喵~additionalRecipes
+            for (RecipeEntry additionalEntry : snap.additionalRecipes) {
+                String addMachineId = getRecipeTypeMachineId(additionalEntry.getRecipeType());
+                if (addMachineId != null && addMachineId.equals(mbm.getId())
+                        && additionalEntry.getRecipe() != null && additionalEntry.getRecipeOutput() != null) {
+                    toAdd.add(additionalEntry.getRecipe());
+                    toAdd.add(new ItemStack[]{additionalEntry.getRecipeOutput()});
+                }
+            }
+        }
+        mbm.clearRecipe();
+        for (int i = 0; i < toAdd.size(); i += 2) {
+            mbm.addRecipe(toAdd.get(i), toAdd.get(i + 1)[0]);
         }
     }
 

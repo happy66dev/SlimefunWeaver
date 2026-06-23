@@ -1121,7 +1121,9 @@ function save() {
       id: savingItemId, name: savingItemName,
       currentRecipeType: firstRecipe ? firstRecipe.type : null,
       currentRecipe: firstRecipe ? firstRecipe.input.slice() : [],
-      recipes: recipeList
+      recipes: recipeList,
+      // 喵~保留原有的 addonRecipes（只读 addon 配方），避免保存后切换物品再切回时只读 tab 消失
+      addonRecipes: (itemData[savingItemId] || {}).addonRecipes || []
     };
     for (var i = 0; i < allItems.length; i++) {
       if (allItems[i].id === savingItemId) {

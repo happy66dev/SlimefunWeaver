@@ -830,12 +830,16 @@ public class RecipeApiHandler implements HttpHandler {
             SlimefunItem item = IconParser.findSlimefunItem(itemId);
             if (item == null) continue;
 
+            // 喵~防御：非 EDITABLE 物品不允许被 SCG 修改配方，直接跳过
+            // 正常情况下 pruneNonEditableEntries/saveRecipesFromJson 已保证文件干净
+            // 此处兜底，防止文件被手动写入脏数据时误改 addon 物品配方喵
+            RecipeSnapshot snapshot = originalRecipes.get(itemId);
+            if (!isSnapshotEditable(snapshot)) continue;
+
             StoredRecipesSection parsed = parseRecipes(storedRecipes, itemId);
             List<Map<?, ?>> recipes = parsed.recipes;
             // 喵~null 表示该物品在 Recipes.yml 里没有 recipes 键，无需处理；空列表=用户主动删除全部 SCG 配方
             if (recipes == null) continue;
-
-            RecipeSnapshot snapshot = originalRecipes.get(itemId);
 
             // 喵~判断原始主配方是否是 SCG 可编辑的 SF 原版类型（在 EDITABLE_RECIPE_TYPES 内）
             // 只有 SF 原版类型的主配方才允许 SCG 用 setRecipe 覆盖或设为 NULL（删除）
